@@ -458,7 +458,7 @@ select{ appearance:none; background-image:url("data:image/svg+xml;utf8,<svg xmln
    НАСТРОЙКА: Supabase → Project Settings → Data API
 ========================================================= */
 const SUPABASE_URL = "https://wwyxvfpqhptsryaaaefo.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind3eXh2ZnBxaHB0c3J5YWFhZWZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQzNjY2NDAsImV4cCI6MjA5OTk0MjY0MH0.z96aEH-eQgLj-x7fCgTxlsMGQ8zW3ba4mmoUlFiWVYM";
+const SUPABASE_KEY = "sb_publishable_2yTQm5JjVI4S0cM59eZg6w_o6mKOont";
 
 /* ---------- мелкие помощники ---------- */
 const $ = id => document.getElementById(id);
@@ -2178,15 +2178,43 @@ async function refreshBadges(){
    ===================================================================== */
 async function hwUpload(file, ownerId){
   const safe = (file.name||'file').replace(/[^\w.\-]+/g,'_');
-  const path = `${ownerId||me.id}/${Date.now()}_${safe}`;
+  const path = `${ownerId||me.id}/${Date.now()}_${Math.random().toString(36).slice(2,7)}_${safe}`;
   const { error } = await sb.storage.from('homework').upload(path, file, { upsert:false, contentType:file.type||undefined });
   if(error) throw error;
   return path;
+}
+// Загружает сразу несколько файлов, возвращает массив путей.
+// Если один из файлов не загрузился (например, слишком большой или недопустимый тип),
+// остальные всё равно загрузятся — в конце покажем, что не получилось.
+async function hwUploadMany(files, ownerId){
+  const paths = []; const failed = [];
+  for(const f of Array.from(files||[])){
+    try{ paths.push(await hwUpload(f, ownerId)); }
+    catch(e){ failed.push(`${f.name}: ${e.message||e}`); }
+  }
+  if(failed.length) alert('Не удалось загрузить:\n' + failed.join('\n'));
+  return paths;
 }
 async function hwSignedUrl(path){
   if(!path) return null;
   const { data } = await sb.storage.from('homework').createSignedUrl(path, 3600);
   return data ? data.signedUrl : null;
+}
+// Собирает список путей к файлам из строки (attachments — новый формат,
+// attachment — старый, на всякий случай поддерживаем оба).
+function hwAttList(row){
+  if(row && Array.isArray(row.attachments) && row.attachments.length) return row.attachments;
+  if(row && row.attachment) return [row.attachment];
+  return [];
+}
+// Превращает список путей в готовые ссылки-теги для вставки в карточку.
+async function hwAttLinksHtml(paths, label){
+  const list = paths || [];
+  if(!list.length) return '';
+  const urls = await Promise.all(list.map(p => hwSignedUrl(p)));
+  return urls.map((u,i) => u
+    ? `<a class="file-link" href="${u}" target="_blank" rel="noopener">📎 ${label}${list.length>1 ? ' '+(i+1) : ''}</a>`
+    : '').join(' ');
 }
 
 /* =====================================================================
@@ -2336,31 +2364,36 @@ const HW = {
   },
   async studentCard(h, sub){
     const card = el('div', 'hw' + (sub && sub.grade ? ' done' : ''));
-    let att = '';
-    if(h.attachment){ const u = await hwSignedUrl(h.attachment); att = u ? `<a class="file-link" href="${u}" target="_blank" rel="noopener">📎 Файл от учителя</a>` : ''; }
+    const att = await hwAttLinksHtml(hwAttList(h), 'Файл от учителя');
     card.innerHTML = `<h4>${esc(h.title)}</h4>${h.due_date ? `<div class="dim">Срок: ${fmtDate(h.due_date)}</div>` : ''}
       <div style="margin:6px 0">${nl2br(h.body || '')}</div>${att}`;
     const zone = el('div'); zone.style.marginTop = '10px'; card.appendChild(zone);
     const gr = sub && sub.grade ? `<span class="chip g${sub.grade}">Оценка: ${sub.grade}</span>${sub.teacher_comment ? ` <span class="dim">${esc(sub.teacher_comment)}</span>` : ''}` : '';
+    const existingAtt = hwAttList(sub);
     zone.innerHTML = `
       ${sub ? `<div class="dim">Ответ отправлен ${fmtTime(sub.submitted_at)}. ${gr}</div>` : ''}
       <label style="margin-top:8px">Ответ письменно</label>
       <textarea class="hw-text" placeholder="Напишите решение или ответ">${sub ? esc(sub.text_answer || '') : ''}</textarea>
-      <div class="drop"><div class="drop-row"><button type="button" class="b-line b-sm hw-pick">Прикрепить файл с решением</button>
-        <span class="drop-note hw-note">${sub && sub.attachment ? 'Файл прикреплён' : 'Файл не выбран'}</span></div>
-        <input type="file" class="hw-file" style="display:none" accept="image/*,application/pdf,.doc,.docx,.txt"></div>
+      <div class="drop"><div class="drop-row"><button type="button" class="b-line b-sm hw-pick">Прикрепить файлы с решением</button>
+        <span class="drop-note hw-note">${existingAtt.length ? `Прикреплено файлов: ${existingAtt.length}` : 'Файлы не выбраны'}</span></div>
+        <input type="file" class="hw-file" multiple style="display:none" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip"></div>
       <button class="b-main hw-submit">${sub ? 'Обновить ответ' : 'Отправить ответ'}</button>`;
-    const fileInput = zone.querySelector('.hw-file'); let picked = null;
+    const fileInput = zone.querySelector('.hw-file'); let pickedFiles = [];
     zone.querySelector('.hw-pick').onclick = () => fileInput.click();
-    fileInput.onchange = e => { picked = e.target.files[0] || null; zone.querySelector('.hw-note').textContent = picked ? picked.name : 'Файл не выбран'; };
+    fileInput.onchange = e => {
+      pickedFiles = Array.from(e.target.files || []);
+      zone.querySelector('.hw-note').textContent = pickedFiles.length
+        ? `Выбрано файлов: ${pickedFiles.length} (${pickedFiles.map(f=>f.name).join(', ')})`
+        : (existingAtt.length ? `Прикреплено файлов: ${existingAtt.length}` : 'Файлы не выбраны');
+    };
     zone.querySelector('.hw-submit').onclick = async ev => {
       const btn = ev.target; btn.disabled = true; btn.textContent = 'Отправляем…';
       try{
-        let path = sub ? sub.attachment : null;
-        if(picked) path = await hwUpload(picked);
+        let atts = existingAtt;
+        if(pickedFiles.length) atts = await hwUploadMany(pickedFiles);
         const row = { homework_id:h.id, student_id:me.id,
           text_answer: zone.querySelector('.hw-text').value.trim() || null,
-          attachment: path, submitted_at: new Date().toISOString() };
+          attachment: atts[0] || null, attachments: atts, submitted_at: new Date().toISOString() };
         const { error } = await sb.from('homework_submissions').upsert(row, { onConflict:'homework_id,student_id' });
         if(error) throw error;
         this.student($('view-hw'));
@@ -2378,30 +2411,33 @@ const HW = {
         <label>Текст задания</label><textarea id="hw-body"></textarea>
         <div class="row2">
           <div><label>Срок сдачи</label><input id="hw-due" type="date"></div>
-          <div><label>Файл к заданию</label>
-            <div class="drop"><div class="drop-row"><button type="button" class="b-line b-sm" id="hw-tpick">Выбрать файл</button>
-              <span class="drop-note" id="hw-tnote">Не выбран</span></div>
-              <input type="file" id="hw-tfile" style="display:none"></div></div>
+          <div><label>Файлы к заданию</label>
+            <div class="drop"><div class="drop-row"><button type="button" class="b-line b-sm" id="hw-tpick">Выбрать файлы</button>
+              <span class="drop-note" id="hw-tnote">Не выбраны</span></div>
+              <input type="file" id="hw-tfile" multiple style="display:none" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip"></div></div>
         </div>
         <button class="b-main" id="hw-send">Отправить ученику</button>
       </div>
       <div class="card"><div class="card-head"><h3>Выданные задания и ответы</h3></div><div id="hw-given"><div class="spin">Загружаем…</div></div></div>`;
     const studs = await this.students();
     $('hw-student').innerHTML = studs.map(s=>`<option value="${s.id}">${esc(s.full_name||'Без имени')}</option>`).join('') || '<option value="">Нет учеников</option>';
-    let tfile = null;
+    let tfiles = [];
     $('hw-tpick').onclick = () => $('hw-tfile').click();
-    $('hw-tfile').onchange = e => { tfile = e.target.files[0] || null; $('hw-tnote').textContent = tfile ? tfile.name : 'Не выбран'; };
+    $('hw-tfile').onchange = e => {
+      tfiles = Array.from(e.target.files || []);
+      $('hw-tnote').textContent = tfiles.length ? `Выбрано файлов: ${tfiles.length} (${tfiles.map(f=>f.name).join(', ')})` : 'Не выбраны';
+    };
     $('hw-send').onclick = async () => {
       const student = $('hw-student').value, title = $('hw-title').value.trim();
       if(!student || !title){ note('hw-msg','Выберите ученика и впишите заголовок','bad'); return; }
       const btn = $('hw-send'); btn.disabled = true; btn.textContent = 'Отправляем…';
       try{
-        let path = null; if(tfile) path = await hwUpload(tfile, student);
+        let atts = []; if(tfiles.length) atts = await hwUploadMany(tfiles, student);
         const { error } = await sb.from('homework').insert({ teacher_id:me.id, student_id:student,
-          title, body:$('hw-body').value.trim()||null, attachment:path, due_date:$('hw-due').value||null });
+          title, body:$('hw-body').value.trim()||null, attachment: atts[0]||null, attachments: atts, due_date:$('hw-due').value||null });
         if(error) throw error;
         note('hw-msg','Задание отправлено','good');
-        $('hw-title').value=''; $('hw-body').value=''; $('hw-due').value=''; tfile=null; $('hw-tnote').textContent='Не выбран';
+        $('hw-title').value=''; $('hw-body').value=''; $('hw-due').value=''; tfiles=[]; $('hw-tnote').textContent='Не выбраны';
         this.loadGiven();
       }catch(e){ note('hw-msg','Ошибка: '+(e.message||e),'bad'); }
       btn.disabled = false; btn.textContent = 'Отправить ученику';
@@ -2423,7 +2459,7 @@ const HW = {
     card.innerHTML = `<h4>${esc(h.title)}</h4><div class="dim">${esc(name||'Ученик')} · ${fmtDate(h.created_at)}${h.due_date ? ' · срок '+fmtDate(h.due_date) : ''}</div>`;
     if(!sub){ card.innerHTML += '<div class="dim" style="margin-top:8px">Ответа пока нет.</div>'; return card; }
     const zone = el('div'); zone.style.marginTop = '10px';
-    let att = ''; if(sub.attachment){ const u = await hwSignedUrl(sub.attachment); att = u ? `<a class="file-link" href="${u}" target="_blank" rel="noopener">📎 Файл ученика</a>` : ''; }
+    const att = await hwAttLinksHtml(hwAttList(sub), 'Файл ученика');
     zone.innerHTML = `<div style="background:var(--bg-soft);padding:10px 12px;border-radius:9px">${sub.text_answer ? nl2br(sub.text_answer) : '<span class="dim">без текста</span>'}<br>${att}</div>
       <div class="row2" style="margin-top:8px">
         <div><label>Оценка (1–5)</label><input type="number" min="1" max="5" class="gr-val" value="${sub.grade||''}"></div>
