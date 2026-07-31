@@ -1754,7 +1754,8 @@ async function linkParent(student){
       close(); MQ.toast(pid ? 'Родитель привязан' : 'Привязка снята','ok'); MQ.render();
     });
 }
-
+MQ.renameStudent = renameStudent;
+MQ.deleteStudent = deleteStudent;
 MQ.views.students = async function(){
   const wrap = MQ.el('div','mq-stack mq-anim-in',
     '<div class="mq-row mq-row--wrap"><h2 style="margin:0">Ученики</h2><div class="mq-spacer"></div>' +
@@ -1763,6 +1764,56 @@ MQ.views.students = async function(){
   wrap.appendChild(box);
   const { data: list } = await MQ.sb.from('profiles')
     .select('id,full_name,points,streak,parent_id').eq('role','student').order('full_name').limit(100);
+
+  function paint(f){
+    box.innerHTML = '';
+    const items = (list || []).filter(s => !f ||
+      (s.full_name || '').toLowerCase().indexOf(f.toLowerCase()) > -1);
+    if (!items.length){ box.appendChild(MQ.empty('Никого не нашли','users')); return; }
+    const isTeacher = MQ.isTeacher(); // показываем кнопки управления только учителю
+    items.forEach(s => {
+      const c = MQ.el('div','mq-card mq-card--hover',
+        '<div class="mq-card__head"><span class="mq-avatar">' +
+        MQ.esc((s.full_name || '?').charAt(0).toUpperCase()) + '</span>' +
+        '<div style="flex:1;min-width:0"><h3 class="mq-card__title">' +
+        MQ.esc(s.full_name || 'Без имени') + '</h3><p class="mq-card__sub">' +
+        MQ.icon('coin',{size:13}) + ' ' + (s.points || 0) + ' · серия ' + (s.streak || 0) +
+        (s.parent_id ? ' · родитель привязан' : '') + '</p></div></div>' +
+        '<div class="mq-row mq-row--wrap" style="gap:8px">' +
+          '<button class="mq-btn mq-btn--primary mq-btn--sm" data-a="grade">' +
+          MQ.icon('star',{size:15}) + 'Оценка</button>' +
+          '<button class="mq-btn mq-btn--ghost mq-btn--sm" data-a="journal">' +
+          MQ.icon('book',{size:15}) + 'Журнал</button>' +
+          '<button class="mq-btn mq-btn--ghost mq-btn--sm" data-a="stats">' +
+          MQ.icon('chart',{size:15}) + 'Прогресс</button>' +
+          '<button class="mq-btn mq-btn--ghost mq-btn--sm" data-a="link">' +
+          MQ.icon('family',{size:15}) + 'Родитель</button>' +
+          (isTeacher ? 
+            '<button class="mq-btn mq-btn--ghost mq-btn--sm" data-a="rename">' +
+              MQ.icon('edit',{size:15}) + 'Имя</button>' +
+            '<button class="mq-btn mq-btn--danger mq-btn--sm" data-a="delete">' +
+              MQ.icon('trash',{size:15}) + 'Удалить</button>' 
+            : '') +
+        '</div>');
+      // Обработчики кнопок
+      c.querySelector('[data-a="grade"]').onclick = () =>
+        MQ.gradeDialog(s.id, s.full_name || 'ученик', null);
+      c.querySelector('[data-a="journal"]').onclick = () => MQ.go('journal',{ uid:s.id });
+      c.querySelector('[data-a="stats"]').onclick = () => MQ.go('stats',{ uid:s.id });
+      c.querySelector('[data-a="link"]').onclick = () => linkParent(s);
+      if (isTeacher) {
+        c.querySelector('[data-a="rename"]').onclick = () => 
+          renameStudent(s.id, s.full_name || '');
+        c.querySelector('[data-a="delete"]').onclick = () => 
+          deleteStudent(s.id, s.full_name || 'Ученик');
+      }
+      box.appendChild(c);
+    });
+  }
+  paint('');
+  MQ.$('#stQ', wrap).oninput = MQ.debounce(e => paint(e.target.value), 220);
+  return wrap;
+};
 
   function paint(f){
     box.innerHTML = '';
@@ -2702,8 +2753,49 @@ MQ.views.home = function(){
   return wrap;
 };
 })();
-</script>
 
-</body>
+
+// Функции для управления учениками (переименование, удаление)
+
+
+async function renameStudent(studentId, currentName) {
+  const newName = await MQ.promptBox(
+    'Введите новое имя для ученика',
+    currentName || '',
+    'Переименование ученика'
+  );
+  if (!newName || newName.trim() === '') return;
+  if (newName.trim() === currentName) {
+    MQ.toast('Имя не изменилось', 'info');
+    return;
+  }
+  const { error } = await MQ.sb
+    .from('profiles')
+    .update({ full_name: newName.trim() })
+    .eq('id', studentId);
+  if (error) {
+    MQ.toast(error.message, 'err');
+  } else {
+    MQ.toast('Имя обновлено ✅', 'ok');
+    MQ.render(); // обновляем список учеников
+  }
+}
+
+async function deleteStudent(studentId, studentName) {
+  const confirmed = await MQ.confirmBox(
+    `Удалить ученика "${studentName}"?\nЭто действие необратимо! Все данные ученика будут удалены.`
+  );
+  if (!confirmed) return;
+
+  const { error } = await MQ.sb.rpc('delete_profile', { p_user_id: studentId });
+  if (error) {
+    MQ.toast(error.message, 'err');
+  } else {
+    MQ.toast(`Ученик "${studentName}" удалён`, 'ok');
+    MQ.render(); // обновляем список
+  }
+}
+  </script>
+  </body>
 </html>
 
