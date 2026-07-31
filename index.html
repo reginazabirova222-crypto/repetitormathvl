@@ -304,6 +304,7 @@ button,input,textarea,select{font:inherit;color:inherit}
 .mq-task-body sup,[contenteditable] sup{font-size:.72em;vertical-align:super}
 .mq-task-body sub,[contenteditable] sub{font-size:.72em;vertical-align:sub}
 [contenteditable] img{max-width:100%;border-radius:10px;margin:8px 0}
+.mq-task-img{max-width:100%;max-height:200px;border-radius:10px;margin:8px 0;display:block}
 .mq-ed-bar{display:flex;flex-wrap:wrap;gap:6px;padding:10px;border:1.5px solid var(--line);
   border-radius:var(--r-sm) var(--r-sm) 0 0;background:var(--surface-2);border-bottom:0}
 .mq-ed-body{border:1.5px solid var(--line);border-radius:0 0 var(--r-sm) var(--r-sm);
@@ -1755,7 +1756,6 @@ async function linkParent(student){
     });
 }
 
-// ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ УЧЕНИКОВ =====
 async function renameStudent(studentId, currentName) {
   const newName = await MQ.promptBox(
     'Введите новое имя для ученика',
@@ -1793,11 +1793,9 @@ async function deleteStudent(studentId, studentName) {
   }
 }
 
-// Делаем функции доступными через MQ
 MQ.renameStudent = renameStudent;
 MQ.deleteStudent = deleteStudent;
 
-// ===== ОСНОВНОЙ ВИД «УЧЕНИКИ» =====
 MQ.views.students = async function(){
   const wrap = MQ.el('div','mq-stack mq-anim-in',
     '<div class="mq-row mq-row--wrap"><h2 style="margin:0">Ученики</h2><div class="mq-spacer"></div>' +
@@ -1837,7 +1835,6 @@ MQ.views.students = async function(){
               MQ.icon('trash',{size:15}) + 'Удалить</button>' 
             : '') +
         '</div>');
-      // Обработчики
       c.querySelector('[data-a="grade"]').onclick = () =>
         MQ.gradeDialog(s.id, s.full_name || 'ученик', null);
       c.querySelector('[data-a="journal"]').onclick = () => MQ.go('journal',{ uid:s.id });
@@ -2286,7 +2283,7 @@ MQ.views.orders = async function(){
 
 <script>
 /* =====================================================================
-   B9 — БАНК ЗАДАЧ + РЕДАКТОР (шрифт, размер, степени, индексы, формулы, фото)
+   B9 — БАНК ЗАДАЧ + РЕДАКТОР (с отдельным фото и баллами)
    ===================================================================== */
 (function(){
 'use strict';
@@ -2359,6 +2356,7 @@ function editor(initial){
     get text(){ return body.textContent.trim(); } };
 }
 
+// Обновлённый диалог создания/редактирования задачи
 async function taskDialog(task){
   const t = task || {};
   const ed = editor(t.statement_html || (t.statement ? MQ.esc(t.statement) : ''));
@@ -2382,27 +2380,56 @@ async function taskDialog(task){
       '<label class="mq-field" style="max-width:120px"><span class="mq-label">Сложность</span>' +
       '<input class="mq-input" id="tkD" type="number" min="1" max="5" value="' +
       (t.difficulty || 1) + '"></label></div>' +
-    '<span class="mq-label">Условие задачи</span>');
+    '<label class="mq-field"><span class="mq-label">Изображение к задаче (необязательно)</span>' +
+    '<input class="mq-input" id="tkImg" type="file" accept="image/*"></label>' +
+    (t.image_path ? '<div id="tkImgPrev"><img src="' + MQ.pubUrl('tasks', t.image_path) + '" style="max-height:120px;border-radius:8px"></div>' : '<div id="tkImgPrev"></div>') +
+    '<hr><span class="mq-label">Условие задачи (текст + формулы)</span>');
   form.appendChild(ed.node);
   form.appendChild(MQ.el('div','mq-stack',
     '<label class="mq-field"><span class="mq-label">Ответ</span>' +
     '<input class="mq-input" id="tkA" value="' + MQ.esc(t.answer || '') + '"></label>' +
     '<label class="mq-field"><span class="mq-label">Решение (необязательно)</span>' +
-    '<textarea class="mq-textarea" id="tkSol">' + MQ.esc(t.solution || '') + '</textarea></label>'));
+    '<textarea class="mq-textarea" id="tkSol">' + MQ.esc(t.solution || '') + '</textarea></label>' +
+    '<label class="mq-field"><span class="mq-label">Баллы за решение</span>' +
+    '<input class="mq-input" id="tkReward" type="number" min="0" value="' + (t.reward_points || 0) + '"></label>'));
+
+  const imgInput = MQ.$('#tkImg', form);
+  const imgPrev = MQ.$('#tkImgPrev', form);
+  imgInput.onchange = e => {
+    const f = e.target.files[0];
+    if (f) {
+      imgPrev.innerHTML = '<img src="' + URL.createObjectURL(f) + '" style="max-height:120px;border-radius:8px">';
+    }
+  };
 
   MQ.modalNode(t.id ? 'Изменить задачу' : 'Новая задача', form,
     t.id ? 'Сохранить' : 'Добавить', async (go, close) => {
       if (!ed.html){ MQ.toast('Заполните условие','warn'); return; }
       go.disabled = true;
       go.innerHTML = MQ.icon('refresh',{size:17,cls:'mq-spin'}) + 'Сохраняем...';
+      let image_path = t.image_path || null;
+      const f = MQ.$('#tkImg', form).files[0];
+      if (f){
+        const p = 'tasks/' + Date.now() + '-' + f.name.replace(/[^\w.\-]/g,'_');
+        const { error } = await MQ.sb.storage.from('tasks').upload(p, f);
+        if (error){ MQ.toast(error.message,'err'); go.disabled = false; return; }
+        image_path = p;
+      }
       const g = MQ.$('#tkG', form).value;
-      const row = { title:MQ.$('#tkT', form).value.trim() || null,
-        statement_html:ed.html, statement:ed.text.slice(0,2000),
-        section:MQ.$('#tkS', form).value, exam:MQ.$('#tkE', form).value || null,
+      const row = {
+        title: MQ.$('#tkT', form).value.trim() || null,
+        statement_html: ed.html,
+        statement: ed.text.slice(0,2000),
+        section: MQ.$('#tkS', form).value,
+        exam: MQ.$('#tkE', form).value || null,
         grade: g ? parseInt(g,10) : null,
-        difficulty:Math.max(1, Math.min(5, parseInt(MQ.$('#tkD', form).value,10) || 1)),
-        answer:MQ.$('#tkA', form).value.trim() || null,
-        solution:MQ.$('#tkSol', form).value.trim() || null, author_id:MQ.user.id };
+        difficulty: Math.max(1, Math.min(5, parseInt(MQ.$('#tkD', form).value,10) || 1)),
+        answer: MQ.$('#tkA', form).value.trim() || null,
+        solution: MQ.$('#tkSol', form).value.trim() || null,
+        image_path: image_path,
+        reward_points: Math.max(0, parseInt(MQ.$('#tkReward', form).value,10) || 0),
+        author_id: MQ.user.id
+      };
       const res = t.id ? await MQ.sb.from('tasks').update(row).eq('id', t.id)
                        : await MQ.sb.from('tasks').insert(row);
       if (res.error){ MQ.toast(res.error.message,'err'); go.disabled = false; return; }
@@ -2410,6 +2437,65 @@ async function taskDialog(task){
     });
 }
 
+// Диалог решения задачи учеником
+async function solveTaskDialog(task) {
+  const form = MQ.el('div','mq-stack');
+  const body = MQ.el('div','mq-task-body');
+  body.innerHTML = task.statement_html || MQ.esc(task.statement || '');
+  form.appendChild(body);
+  if (task.image_path) {
+    const img = MQ.el('img','mq-task-img');
+    img.src = MQ.pubUrl('tasks', task.image_path);
+    form.appendChild(img);
+  }
+  form.appendChild(MQ.el('label','mq-field',
+    '<span class="mq-label">Ваш ответ</span>' +
+    '<input class="mq-input" id="solveAns" placeholder="Введите ответ">'
+  ));
+  if (task.reward_points > 0) {
+    form.appendChild(MQ.el('div','mq-hint', 'За правильный ответ вы получите ' + task.reward_points + ' баллов.'));
+  }
+
+  MQ.modalNode('Решить задачу', form, 'Проверить', async (go, close) => {
+    const answer = MQ.$('#solveAns', form).value.trim();
+    if (!answer) { MQ.toast('Введите ответ','warn'); return; }
+    go.disabled = true;
+    go.innerHTML = MQ.icon('refresh',{size:17,cls:'mq-spin'}) + 'Проверка...';
+
+    const correct = answer.toLowerCase() === (task.answer || '').toLowerCase();
+    const { error } = await MQ.sb.from('task_solutions').insert({
+      task_id: task.id,
+      user_id: MQ.user.id,
+      answer: answer,
+      correct: correct
+    });
+    if (error) {
+      MQ.toast(error.message, 'err');
+      go.disabled = false;
+      return;
+    }
+
+    if (correct && task.reward_points > 0) {
+      const { data } = await MQ.rpc('add_points',{ p_amount: task.reward_points });
+      if (data && data[0]) {
+        MQ.profile.points = data[0].points;
+        MQ.profile.streak = data[0].streak;
+        MQ.dressHeader();
+      }
+      MQ.pointsPop(task.reward_points, MQ.$('#mqPts'));
+      MQ.confetti(30);
+      MQ.toast('Правильно! Вы получили ' + task.reward_points + ' баллов 🎉', 'ok', 4000);
+    } else if (correct) {
+      MQ.toast('Правильно!', 'ok');
+    } else {
+      MQ.toast('Неправильно. Попробуйте ещё раз', 'err');
+    }
+    close();
+    MQ.render();
+  });
+}
+
+// Обновлённый вид банка задач
 MQ.views.bank = async function(){
   const isT = MQ.isTeacher();
   const f = MQ.params.filter || { grade:'', section:'', exam:'' };
@@ -2450,15 +2536,35 @@ MQ.views.bank = async function(){
     wrap.appendChild(MQ.empty(isT ? 'Задач нет — добавьте первую' : 'По этим фильтрам задач нет','book'));
     return wrap;
   }
+
+  let solvedIds = [];
+  if (!isT && MQ.isAuthed()){
+    const { data: sols } = await MQ.sb.from('task_solutions')
+      .select('task_id').eq('user_id', MQ.user.id).eq('correct', true);
+    if (sols) solvedIds = sols.map(s => s.task_id);
+  }
+
   tasks.forEach(t => {
-    const c = MQ.el('div','mq-card mq-card--hover',
-      '<div class="mq-card__head">' + MQ.iconBadge('book') +
+    const c = MQ.el('div','mq-card mq-card--hover');
+    c.innerHTML = '<div class="mq-card__head">' + MQ.iconBadge('book') +
       '<div style="flex:1;min-width:0"><h3 class="mq-card__title">' +
       MQ.esc(t.title || 'Задача №' + t.id) + '</h3><p class="mq-card__sub">' + secName(t.section) +
       (t.grade ? ' · ' + t.grade + ' класс' : '') +
       (t.exam ? ' · ' + t.exam.toUpperCase() : '') +
-      ' · сложность ' + t.difficulty + '</p></div></div>' +
-      '<div class="mq-task-body">' + (t.statement_html || MQ.esc(t.statement || '')) + '</div>');
+      ' · сложность ' + t.difficulty +
+      (t.reward_points > 0 ? ' · <b class="mq-chip mq-chip--ok" style="font-size:12px">+' + t.reward_points + ' баллов</b>' : '') +
+      '</p></div>' +
+      (isT ? '<span class="mq-chip">' + (solvedIds.length || 0) + ' решили</span>' : '') +
+      '</div>';
+
+    if (t.image_path) {
+      const img = MQ.el('img','mq-task-img');
+      img.src = MQ.pubUrl('tasks', t.image_path);
+      c.prepend(img);
+    }
+    const body = MQ.el('div','mq-task-body');
+    body.innerHTML = t.statement_html || MQ.esc(t.statement || '');
+    c.appendChild(body);
 
     const row = MQ.el('div','mq-row mq-row--wrap');
     row.style.marginTop = '12px';
@@ -2483,12 +2589,22 @@ MQ.views.bank = async function(){
         MQ.toast('Удалено','ok'); MQ.render();
       };
       row.appendChild(ed); row.appendChild(dl);
+    } else {
+      const alreadySolved = solvedIds.includes(t.id);
+      const btn = MQ.el('button','mq-btn ' + (alreadySolved ? 'mq-btn--ok' : 'mq-btn--primary') + ' mq-btn--sm',
+        alreadySolved ? 'Решено ✓' : (t.reward_points > 0 ? 'Решить (+' + t.reward_points + ')' : 'Решить')
+      );
+      if (!alreadySolved) {
+        btn.onclick = () => solveTaskDialog(t);
+      }
+      row.appendChild(btn);
     }
     c.appendChild(row);
     wrap.appendChild(c);
   });
   return wrap;
 };
+
 })();
 </script>
 
