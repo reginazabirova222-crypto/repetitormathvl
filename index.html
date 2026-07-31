@@ -1754,6 +1754,42 @@ async function linkParent(student){
       close(); MQ.toast(pid ? 'Родитель привязан' : 'Привязка снята','ok'); MQ.render();
     });
 }
+  async function renameStudent(studentId, currentName) {
+  const newName = await MQ.promptBox(
+    'Введите новое имя для ученика',
+    currentName || '',
+    'Переименование ученика'
+  );
+  if (!newName || newName.trim() === '') return;
+  if (newName.trim() === currentName) {
+    MQ.toast('Имя не изменилось', 'info');
+    return;
+  }
+  const { error } = await MQ.sb
+    .from('profiles')
+    .update({ full_name: newName.trim() })
+    .eq('id', studentId);
+  if (error) {
+    MQ.toast(error.message, 'err');
+  } else {
+    MQ.toast('Имя обновлено ✅', 'ok');
+    MQ.render();
+  }
+}
+
+async function deleteStudent(studentId, studentName) {
+  const confirmed = await MQ.confirmBox(
+    `Удалить ученика "${studentName}"?\nЭто действие необратимо! Все данные ученика будут удалены.`
+  );
+  if (!confirmed) return;
+  const { error } = await MQ.sb.rpc('delete_profile', { p_user_id: studentId });
+  if (error) {
+    MQ.toast(error.message, 'err');
+  } else {
+    MQ.toast(`Ученик "${studentName}" удалён`, 'ok');
+    MQ.render();
+  }
+}
 MQ.renameStudent = renameStudent;
 MQ.deleteStudent = deleteStudent;
 MQ.views.students = async function(){
