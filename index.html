@@ -1315,9 +1315,1539 @@
         })();
     </script>
 
-    <!-- ВСЕ ОСТАЛЬНЫЕ VIEW (тренажёры, банк, темы, главная и т.д.) -->
-    <!-- Они идут следом, в том же порядке, что я давал в полном коде ранее -->
-    <!-- Для экономии места здесь не повторяю их, но они уже были в предыдущем ответе -->
-    <!-- Если нужно, я могу выдать полный файл целиком ещё раз с уже вставленными ключами -->
+    <!-- =====================================================================
+    B1 — ТРЕНАЖЁРЫ (игры)
+    ===================================================================== -->
+    <script>
+        (function() {
+            'use strict';
+            const MQ = window.MQ;
+
+            const ri = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a;
+            const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+            const shuffle = arr => { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (
+                        i + 1));
+                    [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; };
+
+            const GEN = {
+                add: l => { const a = ri(1, 10 + l),
+                        b = ri(1, 10 + l);
+                    return { q: a + ' + ' + b, a: a + b }; },
+                sub: l => { const a = ri(5 + l, 20 + l),
+                        b = ri(1, a - 1);
+                    return { q: a + ' − ' + b, a: a - b }; },
+                mul: l => { const a = ri(2, 6 + l),
+                        b = ri(2, 6 + l);
+                    return { q: a + ' × ' + b, a: a * b }; },
+                div: l => { const b = ri(2, 6 + l),
+                        c = ri(1, 6 + l);
+                    return { q: (b * c) + ' ÷ ' + b, a: c }; },
+                pow: l => { const b = ri(2, 4 + l),
+                        e = ri(2, 3);
+                    return { q: b + '^' + e, a: Math.pow(b, e) }; },
+                percent: l => { const p = ri(10, 60 + l * 5),
+                        x = ri(50, 200 + l * 20);
+                    return { q: p + '% от ' + x, a: Math.round(p * x / 100) }; },
+                linear: l => { const a = ri(2, 5 + l),
+                        b = ri(2, 8 + l),
+                        c = a * ri(1, 4 + l) + b;
+                    return { q: a + 'x + ' + b + ' = ' + c, a: (c - b) / a }; },
+                linear2: l => { const a = ri(2, 5 + l),
+                        b = ri(2, 6 + l),
+                        c = ri(2, 5 + l),
+                        d = ri(2, 6 + l),
+                        x = ri(1, 5 + l);
+                    return { q: a + 'x + ' + b + ' = ' + c + 'x + ' + d, a: (d - b) / (a - c) }; },
+                quad: l => { const x1 = ri(1, 5 + l),
+                        x2 = ri(1, 7 + l);
+                    return { q: '\\(x^2 - ' + (x1 + x2) + 'x + ' + (x1 * x2) + ' = 0\\), больший корень', a: Math.max(x1,
+                            x2) }; },
+                square: l => { const a = ri(2, 8 + l); return { q: 'Площадь квадрата со стороной ' + a, a: a * a }; },
+                rect: l => { const a = ri(2, 9 + l),
+                        b = ri(2, 9 + l);
+                    return { q: 'Площадь прямоугольника ' + a + ' × ' + b, a: a * b }; },
+                perim: l => { const a = ri(2, 9 + l),
+                        b = ri(2, 9 + l);
+                    return { q: 'Периметр прямоугольника ' + a + ' × ' + b, a: 2 * (a + b) }; },
+                triangle: l => { const a = ri(2, 10 + l) * 2,
+                        h = ri(2, 8 + l);
+                    return { q: 'Площадь треугольника: основание ' + a + ', высота ' + h, a: a * h / 2 }; },
+                angles: () => { const a = ri(20, 80),
+                        b = ri(20, 150 - a);
+                    return { q: 'Два угла треугольника: ' + a + '° и ' + b + '°. Третий?', a: 180 - a - b }; },
+                seq: l => { const s = ri(1, 9),
+                        d = ri(2, 3 + l);
+                    return { q: s + ', ' + (s + d) + ', ' + (s + 2 * d) + ', ' + (s + 3 * d) + ', ... следующее?', a: s +
+                            4 * d }; },
+                logic: () => { const a = ri(2, 9),
+                        b = ri(2, 9);
+                    return { q: 'У ' + a + ' коробок по ' + b + ' карандашей. Сколько карандашей?', a: a * b }; },
+                speed: l => { const v = ri(3, 8 + l) * 10,
+                        t = ri(2, 5);
+                    return { q: 'Скорость ' + v + ' км/ч, время ' + t + ' ч. Путь?', a: v * t }; },
+                frac: () => { const b = ri(2, 9),
+                        c = ri(2, 9),
+                        a = ri(1, b - 1); return { q: '\\(\\frac{' + a + '}{' + b + '}\\) от ' + (b * c), a: a *
+                        c }; },
+                roots: () => { const x = ri(3, 14); return { q: '\\(\\sqrt{' + (x * x) + '}\\)', a: x }; },
+                system: () => { const x = ri(1, 9),
+                        y = ri(1, 9); return { q: '\\(x+y=' + (x + y) + ',\\ x-y=' + (x - y) + '\\). Найдите \\(x\\)',
+                        a: x }; },
+                discr: () => { const x1 = ri(1, 8),
+                        x2 = ri(1, 8); return { q: 'Дискриминант уравнения \\(x^2-' + (x1 + x2) + 'x+' + (x1 *
+                            x2) + '=0\\)', a: Math.pow(x1 - x2, 2) }; },
+                pyth: () => { const triples = [
+                        [3, 4, 5],
+                        [5, 12, 13],
+                        [6, 8, 10],
+                        [8, 15, 17]
+                    ],
+                    t = pick(triples); return { q: 'Прямоугольный треугольник: катеты ' + t[0] + ' и ' + t[1] +
+                            '. Гипотенуза?', a: t[2] }; },
+                circle: () => { const r = ri(2, 10); return { q: 'Длина окружности при \\(r=' + r +
+                        '\\), если \\(\\pi=3\\)', a: 2 * 3 * r }; },
+                prob: () => { const good = ri(2, 8); return { q: 'Благоприятных исходов ' + good +
+                        ' из 10. Вероятность в процентах?', a: good * 10 }; }
+            };
+            GEN.vpr = l => pick([GEN.percent, GEN.rect, GEN.speed, GEN.seq, GEN.add])(l);
+
+            const SECTIONS = [
+                { key: 'arithmetic', title: 'Арифметика', icon: 'sigma',
+                    kinds: [
+                        ['add', 'Сложение'],
+                        ['sub', 'Вычитание'],
+                        ['mul', 'Умножение'],
+                        ['div', 'Деление'],
+                        ['pow', 'Степени'],
+                        ['percent', 'Проценты'],
+                        ['frac', 'Дроби'],
+                        ['roots', 'Корни']
+                    ] },
+                { key: 'algebra', title: 'Алгебра', icon: 'chart',
+                    kinds: [
+                        ['linear', 'Линейные уравнения'],
+                        ['linear2', 'Уравнения со сдвигом'],
+                        ['quad', 'Квадратные уравнения'],
+                        ['seq', 'Последовательности'],
+                        ['system', 'Системы уравнений'],
+                        ['discr', 'Дискриминант']
+                    ] },
+                { key: 'geometry', title: 'Геометрия', icon: 'ruler',
+                    kinds: [
+                        ['square', 'Площадь квадрата'],
+                        ['rect', 'Площадь прямоугольника'],
+                        ['perim', 'Периметр'],
+                        ['triangle', 'Площадь треугольника'],
+                        ['angles', 'Углы'],
+                        ['pyth', 'Теорема Пифагора'],
+                        ['circle', 'Окружность']
+                    ] },
+                { key: 'logic', title: 'Логика и задачи', icon: 'lightbulb',
+                    kinds: [
+                        ['logic', 'Текстовые задачи'],
+                        ['speed', 'Движение'],
+                        ['prob', 'Вероятность']
+                    ] },
+                { key: 'vpr', title: 'Подготовка к ВПР', icon: 'target', kinds: [
+                    ['vpr', 'Смешанный вариант']
+                ] }
+            ];
+
+            const CATALOG = (function() {
+                const out = [];
+                SECTIONS.forEach(s => s.kinds.forEach(p => out.push({
+                    slug: s.key + '-' + p[0],
+                    section: s.key,
+                    sectionTitle: s.title,
+                    icon: s.icon,
+                    kind: p[0],
+                    lvl: 3,
+                    title: p[1],
+                    sub: 'единый тренажёр без деления на уровни',
+                    reward: 8
+                })));
+                return out;
+            })();
+
+            function makeQuestion(kind, lvl) {
+                const item = (GEN[kind] || GEN.add)(lvl);
+                const right = item.a,
+                    opts = new Set([right]);
+                let guard = 0;
+                while (opts.size < 4 && guard++ < 40) {
+                    const d = ri(1, Math.max(3, Math.round(Math.abs(right) * 0.25) + lvl * 2));
+                    const c = Math.random() < .5 ? right + d : right - d;
+                    if (c !== right && c >= 0) opts.add(c);
+                }
+                while (opts.size < 4) opts.add(right + opts.size);
+                return { q: item.q, a: right, opts: shuffle(Array.from(opts)) };
+            }
+
+            MQ.runDrill = function(game) {
+                const TOTAL = 10;
+                let idx = 0,
+                    correct = 0,
+                    locked = false;
+                const started = Date.now();
+                const view = MQ.$('#mqView');
+                const root = MQ.el('div', 'mq-drill mq-anim-in');
+                const progress = MQ.el('div', 'mq-drill__progress');
+                const dots = [];
+                for (let i = 0; i < TOTAL; i++) {
+                    const dot = MQ.el('span', 'mq-drill__dot');
+                    progress.appendChild(dot);
+                    dots.push(dot);
+                }
+                const question = MQ.el('div', 'mq-drill__question', '');
+                const options = MQ.el('div', 'mq-drill__options', '');
+                const score = MQ.el('div', 'mq-drill__score', '');
+                const back = MQ.el('button', 'mq-btn mq-btn--ghost mq-btn--sm', MQ.icon('arrow-left', { size: 16 }) +
+                    ' Назад');
+                back.onclick = () => MQ.go('games');
+                root.appendChild(back);
+                root.appendChild(progress);
+                root.appendChild(question);
+                root.appendChild(options);
+                root.appendChild(score);
+
+                let currentQ = null;
+
+                function nextQuestion() {
+                    if (idx >= TOTAL) {
+                        const elapsed = (Date.now() - started) / 1000;
+                        const pct = Math.round(correct / TOTAL * 100);
+                        score.innerHTML = '🎉 Готово! Правильных: ' + correct + '/' + TOTAL + ' (' + pct +
+                            '%) за ' + Math.round(elapsed) + 'с';
+                        if (correct === TOTAL) MQ.confetti(20);
+                        return;
+                    }
+                    currentQ = makeQuestion(game.kind, game.lvl);
+                    question.innerHTML = currentQ.q;
+                    options.innerHTML = '';
+                    currentQ.opts.forEach(o => {
+                        const btn = MQ.el('button', 'mq-drill__option', String(o));
+                        btn.onclick = () => {
+                            if (locked) return;
+                            locked = true;
+                            const ok = o === currentQ.a;
+                            if (ok) correct++;
+                            btn.classList.add(ok ? 'mq-drill__option--correct' : 'mq-drill__option--wrong');
+                            dots[idx].classList.add(ok ? 'mq-drill__dot--done' : 'mq-drill__dot--wrong');
+                            if (!ok) {
+                                options.querySelectorAll('.mq-drill__option').forEach(b => {
+                                    if (Number(b.textContent) === currentQ.a) b.classList.add(
+                                        'mq-drill__option--correct');
+                                });
+                            }
+                            setTimeout(() => {
+                                idx++;
+                                locked = false;
+                                nextQuestion();
+                            }, 800);
+                        };
+                        options.appendChild(btn);
+                    });
+                    score.innerHTML = 'Вопрос ' + (idx + 1) + '/' + TOTAL + ' · Правильно: ' + correct;
+                }
+                nextQuestion();
+                return root;
+            };
+
+            MQ.views.games = function() {
+                const wrap = MQ.el('div', 'mq-stack mq-anim-in');
+                wrap.appendChild(MQ.el('h2', '', 'Тренажёры'));
+                const grid = MQ.el('div', 'mq-grid mq-grid--3');
+                CATALOG.forEach(g => {
+                    const c = MQ.el('div', 'mq-card mq-card--hover',
+                        MQ.iconBadge(g.icon) + '<h3 style="margin:12px 0 4px">' + MQ.esc(g.title) +
+                        '</h3>' +
+                        '<p class="mq-muted" style="margin:0;font-size:13px">' + MQ.esc(g.sub) +
+                        ' · ' + g.reward + ' баллов</p>');
+                    c.style.cursor = 'pointer';
+                    c.onclick = () => {
+                        const drill = MQ.runDrill(g);
+                        const view = MQ.$('#mqView');
+                        view.innerHTML = '';
+                        view.appendChild(drill);
+                    };
+                    grid.appendChild(c);
+                });
+                wrap.appendChild(grid);
+                return wrap;
+            };
+
+        })();
+    </script>
+
+    <!-- =====================================================================
+    B2 — ДОМАШНИЕ ЗАДАНИЯ
+    ===================================================================== -->
+    <script>
+        (function() {
+            'use strict';
+            const MQ = window.MQ;
+
+            async function submitDialog(hw) {
+                const dz = MQ.dropzone({ title: 'Прикрепите решение', max: 10, beforeUpload: MQ.homeworkFilesAsPdf,
+                    hint: 'Фото автоматически соберутся в один PDF; PDF и документы прикрепятся как есть' });
+                const wrap = MQ.el('div', 'mq-stack',
+                    '<label class="mq-field"><span class="mq-label">Комментарий (необязательно)</span>' +
+                    '<textarea class="mq-textarea" id="sbCom" placeholder="Что было сложно?"></textarea></label>');
+                wrap.appendChild(dz.node);
+                MQ.modalNode('Сдать: ' + hw.title, wrap, 'Отправить', async (go, close) => {
+                    if (!dz.files.length) { MQ.toast('Прикрепите хотя бы один файл', 'warn'); return; }
+                    go.disabled = true;
+                    go.innerHTML = MQ.icon('refresh', { size: 17, cls: 'mq-spin' }) + 'Готовим PDF и загружаем...';
+                    const attachments = await dz.upload(MQ.CFG.BUCKETS.hw, MQ.user.id + '/hw' + hw.id);
+                    const { error } = await MQ.sb.from('homework_submissions').insert({
+                        homework_id: hw.id,
+                        student_id: MQ.user.id,
+                        comment: (MQ.$('#sbCom', wrap).value || '').trim() || null,
+                        attachments
+                    });
+                    if (error) { MQ.toast(error.message, 'err');
+                        go.disabled = false;
+                        go.textContent = 'Отправить'; return; }
+                    await MQ.sb.from('homework').update({ status: 'submitted' }).eq('id', hw.id);
+                    close();
+                    MQ.confetti(28);
+                    MQ.toast('Работа отправлена', 'ok');
+                    MQ.render();
+                });
+            }
+
+            async function gradeSubmission(sub) {
+                const form = MQ.el('div', 'mq-stack',
+                    '<div class="mq-row" style="justify-content:center;gap:8px" id="gsV"></div>' +
+                    '<label class="mq-field"><span class="mq-label">Комментарий ученику</span>' +
+                    '<textarea class="mq-textarea" id="gsC" placeholder="Что получилось, над чем работать"></textarea></label>' +
+                    '<div class="mq-hint">Оценка попадёт в журнал автоматически.</div>');
+                let picked = 5;
+                const vals = [2, 3, 4, 5];
+                const container = MQ.$('#gsV', form);
+                vals.forEach(v => {
+                    const btn = MQ.el('button', 'mq-btn ' + (v === picked ? 'mq-btn--primary' : 'mq-btn--ghost'),
+                        String(v));
+                    btn.onclick = () => {
+                        picked = v;
+                        container.querySelectorAll('.mq-btn').forEach(b => b.className = 'mq-btn mq-btn--ghost');
+                        btn.className = 'mq-btn mq-btn--primary';
+                    };
+                    container.appendChild(btn);
+                });
+                MQ.modalNode('Оценить работу', form, 'Поставить оценку', async (go, close) => {
+                    const comment = MQ.$('#gsC', form).value.trim() || null;
+                    const { error } = await MQ.sb.from('homework_submissions').update({
+                        grade: picked,
+                        comment: comment
+                    }).eq('id', sub.id);
+                    if (error) { MQ.toast(error.message, 'err'); return; }
+                    await MQ.sb.from('homework').update({ status: 'graded' }).eq('id', sub.homework_id);
+                    close();
+                    MQ.toast('Оценка поставлена', 'ok');
+                    MQ.render();
+                });
+            }
+
+            MQ.views.homework = async function() {
+                const isT = MQ.isTeacher();
+                const wrap = MQ.el('div', 'mq-stack mq-anim-in');
+                wrap.appendChild(MQ.el('h2', '', 'Домашние задания'));
+
+                let q = MQ.sb.from('homework').select('*, homework_submissions(*)').order('created_at', { ascending: false })
+                    .limit(30);
+                if (!isT) q = q.eq('student_id', MQ.user.id);
+                const { data: hws, error } = await q;
+                if (error) throw error;
+
+                if (!hws || !hws.length) {
+                    wrap.appendChild(MQ.empty(isT ? 'Нет домашних заданий' : 'У вас нет заданий', 'book'));
+                    return wrap;
+                }
+
+                hws.forEach(hw => {
+                    const sub = hw.homework_submissions && hw.homework_submissions.length ? hw
+                        .homework_submissions[0] : null;
+                    const statusMap = {
+                        pending: '⏳ Ожидает',
+                        submitted: '📤 Сдано',
+                        graded: '✅ Проверено'
+                    };
+                    const status = hw.status || 'pending';
+                    const c = MQ.el('div', 'mq-card',
+                        '<div class="mq-card__head">' +
+                        MQ.iconBadge('book') +
+                        '<div><h3 class="mq-card__title">' + MQ.esc(hw.title) + '</h3>' +
+                        '<p class="mq-card__sub">' + MQ.fmtDate(hw.created_at) + ' · ' + statusMap[status] ||
+                        status +
+                        '</p></div></div>');
+                    if (sub && sub.attachments) {
+                        c.appendChild(MQ.attachList(sub.attachments, MQ.CFG.BUCKETS.hw));
+                    }
+                    if (isT) {
+                        if (status === 'submitted' && sub) {
+                            const gradeBtn = MQ.el('button', 'mq-btn mq-btn--primary mq-btn--sm',
+                                MQ.icon('edit', { size: 15 }) + 'Оценить');
+                            gradeBtn.onclick = () => gradeSubmission(sub);
+                            c.appendChild(gradeBtn);
+                        }
+                    } else {
+                        if (status === 'pending') {
+                            const submitBtn = MQ.el('button', 'mq-btn mq-btn--primary mq-btn--sm',
+                                MQ.icon('upload', { size: 15 }) + 'Сдать');
+                            submitBtn.onclick = () => submitDialog(hw);
+                            c.appendChild(submitBtn);
+                        }
+                        if (sub && sub.grade) {
+                            c.appendChild(MQ.el('div', 'mq-chip mq-chip--ok', 'Оценка: ' + sub.grade));
+                        }
+                    }
+                    wrap.appendChild(c);
+                });
+                return wrap;
+            };
+
+        })();
+    </script>
+
+    <!-- =====================================================================
+    B3 — ЖУРНАЛ ОЦЕНОК
+    ===================================================================== -->
+    <script>
+        (function() {
+            'use strict';
+            const MQ = window.MQ;
+            const KINDS = [
+                ['lesson', 'Ответ на уроке', 1],
+                ['homework', 'Домашняя работа', 1],
+                ['test', 'Контрольная', 2],
+                ['vpr', 'ВПР', 2],
+                ['oge', 'ОГЭ (пробник)', 2],
+                ['ege', 'ЕГЭ (пробник)', 2],
+                ['other', 'Другое', 1]
+            ];
+            const kindName = k => (KINDS.filter(x => x[0] === k)[0] || ['', '—'])[1];
+            const gColor = v => v >= 5 ? 'ok' : v == 4 ? 'brand' : v == 3 ? 'warn' : 'err';
+
+            async function summary(uid) {
+                const { data } = await MQ.sb.from('grades').select('grade').eq('student_id', uid);
+                if (!data || !data.length) return { avg: 0, count: 0 };
+                const total = data.reduce((s, r) => s + r.grade, 0);
+                return { avg: total / data.length, count: data.length };
+            }
+
+            async function gradeList(uid, canEdit, name) {
+                const wrap = MQ.el('div', 'mq-stack');
+                const { data: grades, error } = await MQ.sb.from('grades').select('*').eq('student_id', uid)
+                    .order('created_at', { ascending: false }).limit(50);
+                if (error) { wrap.appendChild(MQ.el('p', 'mq-muted', 'Ошибка загрузки')); return wrap; }
+                if (!grades || !grades.length) {
+                    wrap.appendChild(MQ.el('p', 'mq-muted', 'Оценок пока нет'));
+                    return wrap;
+                }
+                grades.forEach(g => {
+                    const row = MQ.el('div', 'mq-row',
+                        '<span class="mq-chip">' + kindName(g.kind) + '</span>' +
+                        '<span>' + MQ.fmtDate(g.created_at) + '</span>' +
+                        '<span class="mq-chip mq-chip--' + gColor(g.grade) + '">' + g.grade +
+                        '</span>' +
+                        (g.comment ? '<span class="mq-muted">' + MQ.esc(g.comment) + '</span>' : ''));
+                    wrap.appendChild(row);
+                });
+                return wrap;
+            }
+
+            MQ.views.journal = async function() {
+                const uid = MQ.params.uid || MQ.user.id;
+                const isT = MQ.isTeacher();
+                const { data: profile } = await MQ.sb.from('profiles').select('full_name').eq('id', uid).single();
+                const name = profile ? profile.full_name : 'Ученик';
+                const sum = await summary(uid);
+                const wrap = MQ.el('div', 'mq-stack mq-anim-in');
+                wrap.appendChild(MQ.el('h2', '', 'Журнал: ' + MQ.esc(name)));
+                wrap.appendChild(MQ.el('div', 'mq-card',
+                    '<div class="mq-row">' +
+                    '<div><b>Средний балл</b><br><span style="font-size:28px;color:var(--brand)">' + sum.avg
+                    .toFixed(1) + '</span></div>' +
+                    '<div style="margin-left:20px"><b>Всего оценок</b><br><span style="font-size:24px">' + sum
+                    .count + '</span></div></div>'));
+                wrap.appendChild(await gradeList(uid, isT, name));
+                return wrap;
+            };
+
+        })();
+    </script>
+
+    <!-- =====================================================================
+    B4 — СТАТИСТИКА
+    ===================================================================== -->
+    <script>
+        (function() {
+            'use strict';
+            const MQ = window.MQ;
+            MQ.views.stats = async function() {
+                const uid = MQ.params.uid || MQ.user.id;
+                const wrap = MQ.el('div', 'mq-stack mq-anim-in');
+                wrap.appendChild(MQ.el('h2', '', 'Прогресс'));
+                const { data: achievements } = await MQ.sb.from('user_achievements').select('*, achievements(*)')
+                    .eq('user_id', uid);
+                wrap.appendChild(MQ.el('p', '', 'Достижений: ' + (achievements ? achievements.length : 0)));
+                return wrap;
+            };
+        })();
+    </script>
+
+    <!-- =====================================================================
+    B5 — МАГАЗИН
+    ===================================================================== -->
+    <script>
+        (function() {
+            'use strict';
+            const MQ = window.MQ;
+            MQ.views.shop = async function() {
+                const isT = MQ.isTeacher();
+                const wrap = MQ.el('div', 'mq-stack mq-anim-in');
+                wrap.appendChild(MQ.el('h2', '', isT ? 'Управление подарками' : 'Магазин баллов'));
+                const { data: items } = await MQ.sb.from('shop_items').select('*').order('price', { ascending: true });
+                if (!items || !items.length) {
+                    wrap.appendChild(MQ.empty('Товаров пока нет', 'gift'));
+                    return wrap;
+                }
+                const grid = MQ.el('div', 'mq-grid mq-grid--3');
+                items.forEach(item => {
+                    const c = MQ.el('div', 'mq-card',
+                        '<h3>' + MQ.esc(item.name) + '</h3>' +
+                        '<p>' + MQ.esc(item.description || '') + '</p>' +
+                        '<div class="mq-chip">' + item.price + ' баллов</div>');
+                    grid.appendChild(c);
+                });
+                wrap.appendChild(grid);
+                return wrap;
+            };
+        })();
+    </script>
+
+    <!-- =====================================================================
+    B6 — УЧЁБА (learn)
+    ===================================================================== -->
+    <script>
+        (function() {
+            'use strict';
+            const MQ = window.MQ;
+            MQ.views.learn = function() {
+                const isT = MQ.isTeacher();
+                const tiles = [
+                    { k: 'games', i: 'game', t: 'Тренажёры', d: 'Более 20 режимов, все бесплатные' },
+                    { k: 'themes', i: 'theme', t: 'Темы и задачи', d: 'Теория + задачи по темам (5–11 класс)' },
+                    { k: 'bank', i: 'book', t: 'Банк ФИПИ', d: 'ОГЭ, ЕГЭ база/профиль, ВПР по темам' },
+                    { k: 'exams', i: 'target', t: 'ВПР · ОГЭ · ЕГЭ', d: 'Пробники и варианты' }
+                ];
+                tiles.push(isT ? { k: 'orders', i: 'trophy', t: 'Заказы', d: 'Кто что обменял на баллы' } : { k: 'stats',
+                    i: 'chart', t: 'Прогресс', d: 'Цель дня, точность, достижения' });
+                tiles.push({ k: 'shop', i: 'gift', t: 'Магазин', d: isT ? 'Управление подарками' : 'Обмен баллов' });
+
+                const wrap = MQ.el('div', 'mq-stack mq-anim-in');
+                wrap.appendChild(MQ.el('h2', '', 'Учёба'));
+                const grid = MQ.el('div', 'mq-grid mq-grid--2');
+                tiles.forEach(t => {
+                    const c = MQ.el('div', 'mq-card mq-card--hover mq-card--pad-lg',
+                        MQ.iconBadge(t.i) + '<h3 style="margin:12px 0 4px">' + t.t + '</h3>' +
+                        '<p class="mq-muted" style="margin:0;font-size:14px">' + t.d + '</p>');
+                    c.style.cursor = 'pointer';
+                    c.onclick = () => MQ.go(t.k);
+                    grid.appendChild(c);
+                });
+                wrap.appendChild(grid);
+                return wrap;
+            };
+        })();
+    </script>
+
+    <!-- =====================================================================
+    B7 — БАНК ФИПИ (задачи)
+    ===================================================================== -->
+    <script>
+        (function() {
+            'use strict';
+            const MQ = window.MQ;
+            const SECT = [
+                ['arithmetic', 'Арифметика'],
+                ['algebra', 'Алгебра'],
+                ['geometry', 'Геометрия'],
+                ['pythagoras', 'Теорема Пифагора'],
+                ['logic', 'Логика'],
+                ['vpr', 'ВПР'],
+                ['oge', 'ОГЭ'],
+                ['ege_base', 'ЕГЭ база'],
+                ['ege_profile', 'ЕГЭ профиль']
+            ];
+            const GRADES = [5, 6, 7, 8, 9, 10, 11];
+            const secName = k => (SECT.filter(s => s[0] === k)[0] || ['', '—'])[1];
+
+            MQ.geometrySvg = function(type) {
+                const map = {
+                    triangle: '<svg viewBox="0 0 260 170" style="max-width:320px;width:100%;background:#fff;border:1px solid #e6e8f5;border-radius:12px"><polygon points="35,140 225,140 118,28" fill="rgba(108,92,231,.08)" stroke="#4b3fc0" stroke-width="3"/><text x="28" y="158">A</text><text x="226" y="158">B</text><text x="112" y="24">C</text></svg>',
+                    right: '<svg viewBox="0 0 260 170" style="max-width:320px;width:100%;background:#fff;border:1px solid #e6e8f5;border-radius:12px"><polygon points="45,135 220,135 45,32" fill="rgba(9,132,227,.08)" stroke="#0984e3" stroke-width="3"/><path d="M45 112h23v23" fill="none" stroke="#0984e3" stroke-width="2"/><text x="35" y="153">A</text><text x="222" y="153">B</text><text x="34" y="28">C</text><text x="118" y="128">c</text><text x="53" y="86">b</text></svg>',
+                    circle: '<svg viewBox="0 0 220 170" style="max-width:280px;width:100%;background:#fff;border:1px solid #e6e8f5;border-radius:12px"><circle cx="110" cy="85" r="58" fill="rgba(0,184,148,.08)" stroke="#00b894" stroke-width="3"/><line x1="110" y1="85" x2="168" y2="85" stroke="#00b894" stroke-width="3"/><text x="128" y="78">r</text><text x="104" y="101">O</text></svg>',
+                    rectangle: '<svg viewBox="0 0 260 170" style="max-width:320px;width:100%;background:#fff;border:1px solid #e6e8f5;border-radius:12px"><rect x="38" y="42" width="184" height="88" fill="rgba(253,203,110,.14)" stroke="#b8860b" stroke-width="3"/><text x="122" y="37">a</text><text x="226" y="90">b</text></svg>',
+                    trapezoid: '<svg viewBox="0 0 260 170" style="max-width:320px;width:100%;background:#fff;border:1px solid #e6e8f5;border-radius:12px"><polygon points="45,132 215,132 170,45 88,45" fill="rgba(225,112,85,.1)" stroke="#e17055" stroke-width="3"/><line x1="88" y1="45" x2="88" y2="132" stroke="#e17055" stroke-width="2" stroke-dasharray="5 5"/><text x="123" y="40">b</text><text x="123" y="151">a</text><text x="95" y="91">h</text></svg>'
+                };
+                return map[type] || map.right;
+            };
+
+            function editor(initial) {
+                const root = MQ.el('div');
+                root.innerHTML =
+                    '<div class="mq-ed-bar">' +
+                    '<select class="mq-ed-btn" data-cmd="fontName">' +
+                    '<option value="">Шрифт</option>' +
+                    '<option value="-apple-system,sans-serif">Обычный</option>' +
+                    '<option value="Georgia,serif">Georgia</option>' +
+                    '<option value="\'Times New Roman\',serif">Times</option>' +
+                    '<option value="\'Courier New\',monospace">Courier</option></select>' +
+                    '<select class="mq-ed-btn" data-cmd="fontSize">' +
+                    '<option value="">Размер</option><option value="2">Мелкий</option>' +
+                    '<option value="3">Обычный</option><option value="5">Крупный</option>' +
+                    '<option value="6">Очень крупный</option></select>' +
+                    '<button type="button" class="mq-ed-btn" data-c="bold" style="font-weight:800">Ж</button>' +
+                    '<button type="button" class="mq-ed-btn" data-c="italic" style="font-style:italic">К</button>' +
+                    '<button type="button" class="mq-ed-btn" data-c="underline" style="text-decoration:underline">Ч</button>' +
+                    '<button type="button" class="mq-ed-btn" data-c="superscript">x²</button>' +
+                    '<button type="button" class="mq-ed-btn" data-c="subscript">x₂</button>' +
+                    '<button type="button" class="mq-ed-btn" data-ins="frac">a⁄b</button>' +
+                    '<button type="button" class="mq-ed-btn" data-ins="sqrt">√</button>' +
+                    '<button type="button" class="mq-ed-btn" data-ins="pi">π</button>' +
+                    '<button type="button" class="mq-ed-btn" data-ins="pm">±</button>' +
+                    '<button type="button" class="mq-ed-btn" data-ins="le">≤</button>' +
+                    '<button type="button" class="mq-ed-btn" data-ins="ge">≥</button>' +
+                    '<button type="button" class="mq-ed-btn" data-geo>Гео-конструктор</button>' +
+                    '<button type="button" class="mq-ed-btn" data-c="insertUnorderedList">• список</button>' +
+                    '<button type="button" class="mq-ed-btn" data-tex>Формула</button>' +
+                    '<button type="button" class="mq-ed-btn" data-img>' + MQ.icon('image', { size: 14 }) +
+                    ' Фото</button>' +
+                    '<button type="button" class="mq-ed-btn" data-c="removeFormat">Сброс</button>' +
+                    '<input type="file" accept="image/*" hidden data-file></div>' +
+                    '<div class="mq-ed-body" contenteditable="true" data-body></div>' +
+                    '<div class="mq-hint" style="margin-top:6px">Степени и индексы — кнопки x² и x₂. ' +
+                    'Дроби, корни, π, ≤, ≥ выбираются кнопками; геометрию можно вставить конструктором.</div>';
+                const body = root.querySelector('[data-body]');
+                body.innerHTML = initial || '';
+                root.querySelectorAll('[data-c]').forEach(b => {
+                    b.onmousedown = e => e.preventDefault();
+                    b.onclick = () => { body.focus();
+                        document.execCommand(b.dataset.c, false, null); };
+                });
+                root.querySelectorAll('[data-cmd]').forEach(s => s.onchange = () => {
+                    if (!s.value) return;
+                    body.focus();
+                    document.execCommand(s.dataset.cmd, false, s.value);
+                    s.value = '';
+                });
+                root.querySelectorAll('[data-ins]').forEach(b => b.onclick = () => {
+                    const map = {
+                        frac: '\\(\\frac{a}{b}\\)',
+                        sqrt: '\\(\\sqrt{x}\\)',
+                        pi: '\\(\\pi\\)',
+                        pm: '\\(\\pm\\)',
+                        le: '\\(\\le\\)',
+                        ge: '\\(\\ge\\)'
+                    };
+                    body.focus();
+                    document.execCommand('insertText', false, ' ' + (map[b.dataset.ins] || '') + ' ');
+                });
+                root.querySelector('[data-geo]').onclick = async () => {
+                    const type = await MQ.promptBox('Фигура: triangle, right, circle, rectangle, trapezoid',
+                        'right', 'Гео-конструктор');
+                    if (!type) return;
+                    const svg = MQ.geometrySvg(type.trim().toLowerCase());
+                    body.focus();
+                    document.execCommand('insertHTML', false, svg);
+                };
+                root.querySelector('[data-tex]').onclick = async () => {
+                    const tex = await MQ.promptBox('Формула в LaTeX', 'x^2 + 2x - 3 = 0', 'Формула');
+                    if (!tex) return;
+                    body.focus();
+                    document.execCommand('insertText', false, ' \\(' + tex + '\\) ');
+                };
+                const fileIn = root.querySelector('[data-file]');
+                root.querySelector('[data-img]').onclick = () => fileIn.click();
+                fileIn.onchange = async () => {
+                    const f = fileIn.files[0];
+                    fileIn.value = '';
+                    if (!f) return;
+                    MQ.toast('Загружаю фото...', 'info', 1600);
+                    const p = MQ.user.id + '/' + Date.now() + '-' + f.name.replace(/[^\w.\-]/g, '_');
+                    const { error } = await MQ.sb.storage.from('tasks').upload(p, f);
+                    if (error) { MQ.toast(error.message, 'err'); return; }
+                    body.focus();
+                    document.execCommand('insertHTML', false,
+                        '<img src="' + MQ.pubUrl('tasks', p) + '" alt="">');
+                };
+                return { node: root, get html() { return body.innerHTML.trim(); },
+                    get text() { return body.textContent.trim(); } };
+            }
+
+            async function taskDialog(task) {
+                const t = task || {};
+                const ed = editor(t.statement_html || (t.statement ? MQ.esc(t.statement) : ''));
+                const form = MQ.el('div', 'mq-stack',
+                    '<label class="mq-field"><span class="mq-label">Тема / номер</span>' +
+                    '<input class="mq-input" id="tkT" value="' + MQ.esc(t.title || '') +
+                    '" placeholder="Задание 6"></label>' +
+                    '<div class="mq-row mq-row--wrap">' +
+                    '<label class="mq-field" style="flex:1;min-width:110px"><span class="mq-label">Класс</span>' +
+                    '<select class="mq-select" id="tkG"><option value="">—</option>' +
+                    GRADES.map(g => '<option value="' + g + '"' + (t.grade == g ? ' selected' : '') + '>' +
+                        g + ' класс</option>').join('') + '</select></label>' +
+                    '<label class="mq-field" style="flex:1;min-width:130px"><span class="mq-label">Раздел</span>' +
+                    '<select class="mq-select" id="tkS">' +
+                    SECT.map(s => '<option value="' + s[0] + '"' + (t.section === s[0] ? ' selected' : '') + '>' +
+                        s[1] + '</option>').join('') + '</select></label>' +
+                    '<label class="mq-field" style="flex:1;min-width:110px"><span class="mq-label">Экзамен</span>' +
+                    '<select class="mq-select" id="tkE"><option value="">—</option>' +
+                    '<option value="vpr"' + (t.exam === 'vpr' ? ' selected' : '') + '>ВПР</option>' +
+                    '<option value="oge"' + (t.exam === 'oge' ? ' selected' : '') + '>ОГЭ</option>' +
+                    '<option value="ege_base"' + (t.exam === 'ege_base' ? ' selected' : '') + '>ЕГЭ база</option>' +
+                    '<option value="ege_profile"' + (t.exam === 'ege_profile' ? ' selected' : '') +
+                    '>ЕГЭ профиль</option></select></label>' +
+                    '<label class="mq-field" style="max-width:120px"><span class="mq-label">Сложность</span>' +
+                    '<input class="mq-input" id="tkD" type="number" min="1" max="5" value="' +
+                    (t.difficulty || 1) + '"></label></div>' +
+                    '<label class="mq-field"><span class="mq-label">Картинка к задаче (необязательно)</span>' +
+                    '<input class="mq-input" id="tkImg" type="file" accept="image/*"></label>' +
+                    (t.image_path ? '<div id="tkImgPrev"><img src="' + MQ.pubUrl('tasks', t.image_path) +
+                        '" style="max-height:120px;border-radius:8px"></div>' :
+                        '<div id="tkImgPrev"></div>') +
+                    '<hr><span class="mq-label">Задача (текст + формулы)</span>');
+                form.appendChild(ed.node);
+                form.appendChild(MQ.el('div', 'mq-stack',
+                    '<label class="mq-field"><span class="mq-label">Ответ</span>' +
+                    '<input class="mq-input" id="tkA" value="' + MQ.esc(t.answer || '') + '"></label>' +
+                    '<label class="mq-field"><span class="mq-label">Ответ или решение (подробное решение необязательно)</span>' +
+                    '<textarea class="mq-textarea" id="tkSol">' + MQ.esc(t.solution || '') + '</textarea></label>' +
+                    '<label class="mq-field"><span class="mq-label">Баллы за решение</span>' +
+                    '<input class="mq-input" id="tkReward" type="number" min="0" value="' + (t.reward_points || 0) +
+                    '"></label>'));
+
+                const imgInput = MQ.$('#tkImg', form);
+                const imgPrev = MQ.$('#tkImgPrev', form);
+                imgInput.onchange = e => {
+                    const f = e.target.files[0];
+                    if (f) {
+                        imgPrev.innerHTML = '<img src="' + URL.createObjectURL(f) +
+                            '" style="max-height:120px;border-radius:8px">';
+                    }
+                };
+
+                MQ.modalNode(t.id ? 'Изменить задачу' : 'Новая задача', form,
+                    t.id ? 'Сохранить' : 'Добавить', async (go, close) => {
+                        if (!ed.html) { MQ.toast('Заполните условие', 'warn'); return; }
+                        go.disabled = true;
+                        go.innerHTML = MQ.icon('refresh', { size: 17, cls: 'mq-spin' }) + 'Сохраняем...';
+                        let image_path = t.image_path || null;
+                        const f = MQ.$('#tkImg', form).files[0];
+                        if (f) {
+                            const p = 'tasks/' + Date.now() + '-' + f.name.replace(/[^\w.\-]/g, '_');
+                            const { error } = await MQ.sb.storage.from('tasks').upload(p, f);
+                            if (error) { MQ.toast(error.message, 'err');
+                                go.disabled = false; return; }
+                            image_path = p;
+                        }
+                        const data = {
+                            title: MQ.$('#tkT', form).value.trim(),
+                            grade: MQ.$('#tkG', form).value ? parseInt(MQ.$('#tkG', form).value, 10) :
+                            null,
+                            section: MQ.$('#tkS', form).value,
+                            exam: MQ.$('#tkE', form).value || null,
+                            difficulty: parseInt(MQ.$('#tkD', form).value, 10) || 1,
+                            statement_html: ed.html,
+                            answer: MQ.$('#tkA', form).value.trim(),
+                            solution: MQ.$('#tkSol', form).value.trim() || null,
+                            reward_points: parseInt(MQ.$('#tkReward', form).value, 10) || 0,
+                            image_path: image_path,
+                            author_id: MQ.user.id
+                        };
+                        let result;
+                        if (t.id) {
+                            result = await MQ.sb.from('tasks').update(data).eq('id', t.id);
+                        } else {
+                            result = await MQ.sb.from('tasks').insert(data);
+                        }
+                        if (result.error) { MQ.toast(result.error.message, 'err');
+                            go.disabled = false; return; }
+                        close();
+                        MQ.toast(t.id ? 'Задача обновлена' : 'Задача добавлена', 'ok');
+                        MQ.render();
+                    });
+            }
+
+            async function solveTaskDialog(task) {
+                const form = MQ.el('div', 'mq-stack',
+                    '<p><b>' + MQ.esc(task.title) + '</b></p>' +
+                    '<div>' + task.statement_html + '</div>' +
+                    (task.image_path ? '<div><img src="' + MQ.pubUrl('tasks', task.image_path) +
+                        '" style="max-height:200px;border-radius:8px"></div>' : '') +
+                    '<label class="mq-field"><span class="mq-label">Ваш ответ</span>' +
+                    '<input class="mq-input" id="solAns" placeholder="Введите ответ"></label>');
+                MQ.modalNode('Решить задачу', form, 'Проверить', async (go, close) => {
+                    const ans = MQ.$('#solAns', form).value.trim();
+                    if (!ans) { MQ.toast('Введите ответ', 'warn'); return; }
+                    const correct = ans.toLowerCase() === String(task.answer).toLowerCase();
+                    const { error } = await MQ.sb.from('task_solutions').insert({
+                        task_id: task.id,
+                        user_id: MQ.user.id,
+                        answer: ans,
+                        correct: correct
+                    });
+                    if (error) { MQ.toast(error.message, 'err'); return; }
+                    if (correct) {
+                        const { data } = await MQ.rpc('add_points', { p_amount: task.reward_points });
+                        if (data && data[0]) {
+                            MQ.profile.points = data[0].points;
+                            MQ.dressHeader();
+                        }
+                        MQ.pointsPop(task.reward_points, MQ.$('#mqPts'));
+                        MQ.confetti(30);
+                        MQ.toast('Правильно! Вы получили ' + task.reward_points + ' баллов 🎉', 'ok', 4000);
+                    } else {
+                        MQ.toast('Неправильно. Попробуйте ещё раз', 'err');
+                    }
+                    close();
+                    MQ.render();
+                });
+            }
+
+            MQ.views.bank = async function() {
+                const isT = MQ.isTeacher();
+                const f = MQ.params.filter || { grade: '', section: '', exam: '' };
+                const wrap = MQ.el('div', 'mq-stack mq-anim-in');
+                const head = MQ.el('div', 'mq-row mq-row--wrap',
+                    '<h2 style="margin:0">Банк ФИПИ</h2><div class="mq-spacer"></div>');
+                if (isT) {
+                    const add = MQ.el('button', 'mq-btn mq-btn--primary', MQ.icon('plus', { size: 17 }) +
+                    'Новая задача');
+                    add.onclick = () => taskDialog(null);
+                    head.appendChild(add);
+                }
+                wrap.appendChild(head);
+
+                const bar = MQ.el('div', 'mq-card',
+                    '<div class="mq-row mq-row--wrap">' +
+                    '<select class="mq-select" id="fG" style="max-width:150px"><option value="">Все классы</option>' +
+                    GRADES.map(g => '<option value="' + g + '"' + (f.grade == g ? ' selected' : '') + '>' +
+                        g + ' класс</option>').join('') + '</select>' +
+                    '<select class="mq-select" id="fS" style="max-width:170px"><option value="">Все разделы</option>' +
+                    SECT.map(s => '<option value="' + s[0] + '"' + (f.section === s[0] ? ' selected' : '') + '>' +
+                        s[1] + '</option>').join('') + '</select>' +
+                    '<select class="mq-select" id="fE" style="max-width:160px"><option value="">Все экзамены</option>' +
+                    '<option value="vpr"' + (f.exam === 'vpr' ? ' selected' : '') + '>ВПР</option>' +
+                    '<option value="oge"' + (f.exam === 'oge' ? ' selected' : '') + '>ОГЭ</option>' +
+                    '<option value="ege_base"' + (f.exam === 'ege_base' ? ' selected' : '') + '>ЕГЭ база</option>' +
+                    '<option value="ege_profile"' + (f.exam === 'ege_profile' ? ' selected' : '') +
+                    '>ЕГЭ профиль</option></select></div>');
+                wrap.appendChild(bar);
+                ['fG', 'fS', 'fE'].forEach(id => MQ.$('#' + id, bar).onchange = () =>
+                    MQ.go('bank', { filter: { grade: MQ.$('#fG', bar).value,
+                            section: MQ.$('#fS', bar).value, exam: MQ.$('#fE', bar).value } }));
+
+                let q = MQ.sb.from('tasks').select('*').order('created_at', { ascending: false }).limit(80);
+                if (f.grade) q = q.eq('grade', parseInt(f.grade, 10));
+                if (f.section) q = q.eq('section', f.section);
+                if (f.exam) q = q.eq('exam', f.exam);
+                const { data: tasks, error } = await q;
+                if (error) throw error;
+
+                if (!tasks || !tasks.length) {
+                    wrap.appendChild(MQ.empty(isT ? 'Задач нет — добавьте первую' : 'По этим фильтрам задач нет',
+                        'book'));
+                    return wrap;
+                }
+
+                let solvedIds = [];
+                if (!isT && MQ.isAuthed()) {
+                    const { data: sols } = await MQ.sb.from('task_solutions')
+                        .select('task_id').eq('user_id', MQ.user.id).eq('correct', true);
+                    if (sols) solvedIds = sols.map(s => s.task_id);
+                }
+
+                tasks.forEach(t => {
+                    const c = MQ.el('div', 'mq-card');
+                    const row = MQ.el('div', 'mq-row mq-row--wrap');
+                    row.innerHTML =
+                        '<div style="flex:1"><b>' + MQ.esc(t.title) + '</b>' +
+                        '<span class="mq-chip" style="margin-left:8px">' + (t.grade ? t.grade + ' кл' :
+                            '') + '</span>' +
+                        '<span class="mq-chip">' + secName(t.section) + '</span>' +
+                        (t.exam ? '<span class="mq-chip">' + t.exam.toUpperCase() + '</span>' : '') +
+                        '</div>';
+                    const alreadySolved = solvedIds.includes(t.id);
+                    if (!isT && MQ.isAuthed()) {
+                        const btn = MQ.el('button', 'mq-btn ' + (alreadySolved ? 'mq-btn--ghost' :
+                                'mq-btn--primary mq-btn--sm'),
+                            alreadySolved ? MQ.icon('check', { size: 15 }) + 'Решено' : 'Решить');
+                        if (!alreadySolved) {
+                            btn.onclick = () => solveTaskDialog(t);
+                        }
+                        row.appendChild(btn);
+                    }
+                    c.appendChild(row);
+                    if (t.statement_html) {
+                        const st = MQ.el('div', '', t.statement_html);
+                        st.style.marginTop = '8px';
+                        c.appendChild(st);
+                    }
+                    if (t.image_path) {
+                        const img = MQ.el('img', '', '');
+                        img.src = MQ.pubUrl('tasks', t.image_path);
+                        img.style.maxHeight = '160px';
+                        img.style.borderRadius = '8px';
+                        img.style.marginTop = '8px';
+                        c.appendChild(img);
+                    }
+                    wrap.appendChild(c);
+                });
+                return wrap;
+            };
+
+            MQ.taskDialog = taskDialog;
+
+        })();
+    </script>
+
+    <!-- =====================================================================
+    B8 — ПРОБНИКИ (экзамены)
+    ===================================================================== -->
+    <script>
+        (function() {
+            'use strict';
+            const MQ = window.MQ;
+            const EXAMS = [
+                ['vpr', 'ВПР', 'target'],
+                ['oge', 'ОГЭ', 'trophy'],
+                ['ege_base', 'ЕГЭ база', 'chart'],
+                ['ege_profile', 'ЕГЭ профиль', 'chart']
+            ];
+            const GRADES = [4, 5, 6, 7, 8, 9, 10, 11];
+            const examName = k => (EXAMS.filter(e => e[0] === k)[0] || ['', '—', ''])[1];
+            const examIcon = k => (EXAMS.filter(e => e[0] === k)[0] || ['', '', 'target'])[2];
+
+            async function paperDialog() {
+                const dz = MQ.dropzone({ title: 'Файлы пробника', hint: 'Вариант, ответы, критерии · до 25 МБ каждый',
+                    max: 12 });
+                const form = MQ.el('div', 'mq-stack',
+                    '<label class="mq-field"><span class="mq-label">Название</span>' +
+                    '<input class="mq-input" id="epT" placeholder="ОГЭ, вариант 12"></label>' +
+                    '<div class="mq-row mq-row--wrap">' +
+                    '<label class="mq-field" style="flex:1;min-width:110px"><span class="mq-label">Экзамен</span>' +
+                    '<select class="mq-select" id="epE">' +
+                    EXAMS.map(e => '<option value="' + e[0] + '">' + e[1] + '</option>').join('') + '</select></label>' +
+                    '<label class="mq-field" style="flex:1;min-width:100px"><span class="mq-label">Класс</span>' +
+                    '<select class="mq-select" id="epG"><option value="">—</option>' +
+                    GRADES.map(g => '<option value="' + g + '">' + g + '</option>').join('') + '</select></label>' +
+                    '<label class="mq-field" style="flex:1;min-width:100px"><span class="mq-label">Вариант</span>' +
+                    '<input class="mq-input" id="epV" placeholder="12"></label></div>' +
+                    '<label class="mq-field"><span class="mq-label">Ссылка на источник (если есть)</span>' +
+                    '<input class="mq-input" id="epSrc" type="url" placeholder="https://fipi.ru/..."></label>');
+                form.appendChild(dz.node);
+
+                MQ.modalNode('Загрузить пробник', form, 'Загрузить', async (go, close) => {
+                    const title = MQ.$('#epT', form).value.trim();
+                    if (!title) { MQ.toast('Укажите название', 'warn'); return; }
+                    if (!dz.files.length) { MQ.toast('Прикрепите хотя бы один файл', 'warn'); return; }
+                    go.disabled = true;
+                    go.innerHTML = MQ.icon('refresh', { size: 17, cls: 'mq-spin' }) + 'Загрузка...';
+                    const files = await dz.upload('exams', 'papers');
+                    const g = MQ.$('#epG', form).value;
+                    const row = {
+                        title,
+                        exam: MQ.$('#epE', form).value,
+                        grade: g ? parseInt(g, 10) : null,
+                        variant: MQ.$('#epV', form).value.trim() || null,
+                        source_url: MQ.$('#epSrc', form).value.trim() || null,
+                        files,
+                        author_id: MQ.user.id
+                    };
+                    let res = await MQ.sb.from('exam_papers').insert(row);
+                    if (res.error && /source_url/i.test(res.error.message || '')) {
+                        delete row.source_url;
+                        res = await MQ.sb.from('exam_papers').insert(row);
+                    }
+                    if (res.error) { MQ.toast(res.error.message, 'err');
+                        go.disabled = false; return; }
+                    close();
+                    MQ.toast('Пробник загружен', 'ok');
+                    MQ.render();
+                });
+            }
+
+            MQ.views.exams = async function() {
+                const isT = MQ.isTeacher();
+                const cur = MQ.params.exam || '';
+                const wrap = MQ.el('div', 'mq-stack mq-anim-in');
+                const head = MQ.el('div', 'mq-row mq-row--wrap',
+                    '<h2 style="margin:0">ВПР · ОГЭ · ЕГЭ база · ЕГЭ профиль</h2><div class="mq-spacer"></div>');
+                if (isT) {
+                    const add = MQ.el('button', 'mq-btn mq-btn--primary', MQ.icon('upload', { size: 17 }) +
+                        'Загрузить пробник');
+                    add.onclick = paperDialog;
+                    head.appendChild(add);
+                }
+                wrap.appendChild(head);
+
+                const tabs = MQ.el('div', 'mq-row mq-row--wrap');
+                [
+                    ['', 'Все']
+                ].concat(EXAMS.map(e => [e[0], e[1]])).forEach(t => {
+                    const b = MQ.el('button', 'mq-btn mq-btn--sm ' +
+                        (cur === t[0] ? 'mq-btn--primary' : 'mq-btn--ghost'), t[1]);
+                    b.onclick = () => MQ.go('exams', { exam: t[0] });
+                    tabs.appendChild(b);
+                });
+                wrap.appendChild(tabs);
+
+                wrap.appendChild(MQ.el('div', 'mq-card',
+                    '<div class="mq-row">' + MQ.iconBadge('lightbulb', 'info') +
+                    '<div><b>Только пробники</b><p class="mq-muted" style="margin:2px 0 0;font-size:13.5px">' +
+                    'В этом разделе админ загружает только пробные варианты. Банк задач здесь не показывается.</p></div></div>'));
+
+                let q = MQ.sb.from('exam_papers').select('*').order('created_at', { ascending: false }).limit(60);
+                if (cur) q = q.eq('exam', cur);
+                const { data: papers, error } = await q;
+                if (error) throw error;
+
+                if (!papers || !papers.length) {
+                    wrap.appendChild(MQ.empty(isT ? 'Пробников нет — загрузите первый' : 'Пробников пока нет',
+                        'target'));
+                    return wrap;
+                }
+                papers.forEach(p => {
+                    const meta = examName(p.exam) + (p.grade ? ' · ' + p.grade + ' класс' : '') +
+                        (p.variant ? ' · вариант ' + p.variant : '');
+                    const c = MQ.el('div', 'mq-card mq-card--hover',
+                        '<div class="mq-card__head">' +
+                        MQ.iconBadge(examIcon(p.exam), p.exam === 'ege' ? 'info' : p.exam === 'oge' ? 'ok' :
+                            'warn') +
+                        '<div style="flex:1;min-width:0"><h3 class="mq-card__title">' + MQ.esc(p.title) +
+                        '</h3>' +
+                        '<p class="mq-card__sub">' + MQ.esc(meta) + ' · ' + MQ.fmtDate(p.created_at) +
+                        '</p></div></div>');
+                    if (p.source_url) {
+                        const src = MQ.el('a', 'mq-chip', MQ.icon('book', { size: 14 }) + 'Источник ФИПИ / ссылка');
+                        src.href = p.source_url;
+                        src.target = '_blank';
+                        src.rel = 'noopener';
+                        c.appendChild(src);
+                    }
+                    const box = MQ.el('div', 'mq-files');
+                    (Array.isArray(p.files) ? p.files : []).forEach(f => {
+                        const row = MQ.el('div', 'mq-file',
+                            MQ.icon((f.type || '').startsWith('image') ? 'image' : 'file', { size: 17 }) +
+                            '<span class="mq-file__name">' + MQ.esc(f.name) + '</span>' +
+                            '<span class="mq-file__size">' + MQ.human(f.size) + '</span>' +
+                            '<button class="mq-btn mq-btn--ghost mq-btn--sm" type="button">' +
+                            MQ.icon('download', { size: 15 }) + 'Открыть</button>');
+                        row.querySelector('button').onclick = async () => {
+                            const url = await MQ.fileUrl('exams', f.path);
+                            if (url) window.open(url, '_blank', 'noopener');
+                        };
+                        box.appendChild(row);
+                    });
+                    c.appendChild(box);
+                    if (isT) {
+                        const dl = MQ.el('button', 'mq-btn mq-btn--ghost mq-btn--sm', MQ.icon('trash', { size: 15 }) +
+                            'Удалить');
+                        dl.style.marginTop = '10px';
+                        dl.onclick = async () => {
+                            if (!await MQ.confirmBox('Удалить «' + p.title + '»?')) return;
+                            await MQ.sb.from('exam_papers').delete().eq('id', p.id);
+                            MQ.toast('Удалено', 'ok');
+                            MQ.render();
+                        };
+                        c.appendChild(dl);
+                    }
+                    wrap.appendChild(c);
+                });
+                return wrap;
+            };
+        })();
+    </script>
+
+    <!-- =====================================================================
+    B9 — ТЕМЫ (теория + задачи по классам)
+    ===================================================================== -->
+    <script>
+        (function() {
+            'use strict';
+            const MQ = window.MQ;
+
+            const THEMES_DATA = {
+                'pythagoras': {
+                    title: 'Теорема Пифагора',
+                    icon: 'ruler',
+                    iconClass: 'pythagoras',
+                    grade: 8,
+                    theory: `**Теорема Пифагора**: В прямоугольном треугольнике квадрат гипотенузы равен сумме квадратов катетов.
+
+        \\(c^2 = a^2 + b^2\\)
+
+        где \\(c\\) — гипотенуза, \\(a\\) и \\(b\\) — катеты.
+
+        **Обратная теорема**: Если квадрат одной стороны треугольника равен сумме квадратов двух других сторон, то этот треугольник прямоугольный.
+
+        **Египетский треугольник** — стороны 3, 4, 5.
+
+        **Формулы:**
+        - \\(c = \\sqrt{a^2 + b^2}\\)
+        - \\(a = \\sqrt{c^2 - b^2}\\)
+        - \\(b = \\sqrt{c^2 - a^2}\\)`
+                }
+            };
+
+            function getAllThemes() {
+                const stored = JSON.parse(localStorage.getItem('imath_themes') || '{}');
+                const all = { ...THEMES_DATA };
+                Object.keys(stored).forEach(k => {
+                    all[k] = { ...all[k], ...stored[k] };
+                });
+                return all;
+            }
+
+            async function getTasksForTheme(themeKey) {
+                const { data, error } = await MQ.sb.from('tasks')
+                    .select('*')
+                    .eq('section', themeKey)
+                    .order('created_at', { ascending: true })
+                    .limit(100);
+                if (error) { console.warn('[themes]', error); return []; }
+                return data || [];
+            }
+
+            async function getSolvedTaskIds() {
+                if (!MQ.isAuthed()) return [];
+                const { data } = await MQ.sb.from('task_solutions')
+                    .select('task_id').eq('user_id', MQ.user.id).eq('correct', true);
+                return data ? data.map(s => s.task_id) : [];
+            }
+
+            function taskListItem(task, solvedIds) {
+                const div = MQ.el('div', 'mq-card');
+                const row = MQ.el('div', 'mq-row');
+                row.innerHTML = '<div style="flex:1"><b>' + MQ.esc(task.title) + '</b>' +
+                    (task.grade ? ' <span class="mq-chip">' + task.grade + ' кл</span>' : '') +
+                    (task.exam ? ' <span class="mq-chip">' + task.exam.toUpperCase() + '</span>' : '') +
+                    '</div>';
+                const solved = solvedIds.includes(task.id);
+                if (!MQ.isTeacher() && MQ.isAuthed()) {
+                    const btn = MQ.el('button', 'mq-btn ' + (solved ? 'mq-btn--ghost' : 'mq-btn--primary mq-btn--sm'),
+                        solved ? MQ.icon('check', { size: 15 }) + 'Решено' : 'Решить');
+                    if (!solved) {
+                        btn.onclick = () => MQ.taskDialog ? MQ.taskDialog(task) : null;
+                    }
+                    row.appendChild(btn);
+                }
+                div.appendChild(row);
+                if (task.statement_html) {
+                    const st = MQ.el('div', '', task.statement_html);
+                    st.style.marginTop = '6px';
+                    div.appendChild(st);
+                }
+                if (task.image_path) {
+                    const img = MQ.el('img', '', '');
+                    img.src = MQ.pubUrl('tasks', task.image_path);
+                    img.style.maxHeight = '120px';
+                    img.style.borderRadius = '8px';
+                    img.style.marginTop = '6px';
+                    div.appendChild(img);
+                }
+                return div;
+            }
+
+            async function themeDialog(themeKey) {
+                const data = themeKey ? THEMES_DATA[themeKey] : null;
+                const form = MQ.el('div', 'mq-stack',
+                    '<label class="mq-field"><span class="mq-label">Ключ темы (уникальный)</span>' +
+                    '<input class="mq-input" id="thKey" value="' + MQ.esc(themeKey || '') +
+                    '" placeholder="pythagoras" ' + (themeKey ? 'readonly' : '') + '></label>' +
+                    '<label class="mq-field"><span class="mq-label">Название</span>' +
+                    '<input class="mq-input" id="thTitle" value="' + MQ.esc(data ? data.title : '') +
+                    '" placeholder="Теорема Пифагора"></label>' +
+                    '<label class="mq-field"><span class="mq-label">Класс</span><select class="mq-select" id="thGrade">' +
+                    [5, 6, 7, 8, 9, 10, 11].map(g => '<option value="' + g + '"' + (data && data.grade == g ?
+                        ' selected' : '') + '>' + g + ' класс</option>').join('') +
+                    '</select></label>' +
+                    '<label class="mq-field"><span class="mq-label">Иконка (ruler, book, target, ...)</span>' +
+                    '<input class="mq-input" id="thIcon" value="' + MQ.esc(data ? data.icon : 'ruler') +
+                    '" placeholder="ruler"></label>' +
+                    '<label class="mq-field"><span class="mq-label">Теория (LaTeX поддерживается)</span>' +
+                    '<textarea class="mq-textarea" id="thTheory" rows="10" placeholder="Теория по теме...">' +
+                    MQ.esc(data ? data.theory : '') + '</textarea></label>');
+
+                MQ.modalNode(themeKey ? 'Изменить тему' : 'Новая тема', form,
+                    themeKey ? 'Сохранить' : 'Создать', async (go, close) => {
+                        const key = MQ.$('#thKey', form).value.trim();
+                        const title = MQ.$('#thTitle', form).value.trim();
+                        const theory = MQ.$('#thTheory', form).value.trim();
+                        const icon = MQ.$('#thIcon', form).value.trim() || 'ruler';
+                        const grade = parseInt(MQ.$('#thGrade', form).value, 10) || 5;
+                        if (!key || !title) { MQ.toast('Заполните ключ и название', 'warn'); return; }
+                        if (!theory) { MQ.toast('Добавьте теорию', 'warn'); return; }
+                        const stored = JSON.parse(localStorage.getItem('imath_themes') || '{}');
+                        stored[key] = { title, theory, icon, iconClass: key, grade };
+                        localStorage.setItem('imath_themes', JSON.stringify(stored));
+                        THEMES_DATA[key] = { title, theory, icon, iconClass: key, grade };
+                        close();
+                        MQ.toast('Тема сохранена', 'ok');
+                        MQ.render();
+                    });
+            }
+
+            MQ.views.themes = async function() {
+                const params = MQ.params || {};
+                const selectedTheme = params.theme || null;
+                const action = params.action || null;
+                const isT = MQ.isTeacher();
+
+                if (selectedTheme) {
+                    const themes = getAllThemes();
+                    const theme = themes[selectedTheme];
+                    if (!theme) {
+                        return MQ.el('div', 'mq-stack mq-anim-in',
+                            MQ.el('p', '', 'Тема не найдена') +
+                            MQ.el('button', 'mq-btn mq-btn--ghost', 'Назад', { onclick: () => MQ.go('themes') }));
+                    }
+                    if (action === 'manage' && isT) {
+                        themeDialog(selectedTheme);
+                        return MQ.el('div', 'mq-stack mq-anim-in',
+                            MQ.el('p', '', 'Редактирование темы...') +
+                            MQ.el('button', 'mq-btn mq-btn--ghost', 'Назад', { onclick: () => MQ.go('themes') }));
+                    }
+                    const tasks = await getTasksForTheme(selectedTheme);
+                    const solvedIds = await getSolvedTaskIds();
+
+                    const wrap = MQ.el('div', 'mq-stack mq-anim-in');
+                    const back = MQ.el('button', 'mq-btn mq-btn--ghost mq-btn--sm', MQ.icon('arrow-left', { size: 16 }) +
+                        ' Назад к темам');
+                    back.onclick = () => MQ.go('themes');
+                    wrap.appendChild(back);
+
+                    const head = MQ.el('div', 'mq-row mq-row--wrap',
+                        '<div class="mq-row"><span class="mq-theme-icon ' + (theme.iconClass || '') + '">' +
+                        MQ.icon(theme.icon || 'ruler', { size: 28 }) + '</span>' +
+                        '<div><h2 style="margin:0">' + MQ.esc(theme.title) + '</h2>' +
+                        '<p class="mq-muted" style="margin:2px 0 0;font-size:14px">' + tasks.length +
+                        ' задач · ' + (theme.grade ? theme.grade + ' класс' : '') + '</p></div></div>');
+                    if (isT) {
+                        const addTask = MQ.el('button', 'mq-btn mq-btn--primary mq-btn--sm', MQ.icon('plus', { size: 16 }) +
+                            'Добавить задачу');
+                        addTask.onclick = () => {
+                            const t = { section: selectedTheme, grade: theme.grade || null };
+                            MQ.taskDialog(t);
+                        };
+                        head.appendChild(addTask);
+                        const manageTheory = MQ.el('button', 'mq-btn mq-btn--ghost mq-btn--sm', MQ.icon('edit', { size: 16 }) +
+                            'Редактировать теорию');
+                        manageTheory.onclick = () => MQ.go('themes', { theme: selectedTheme, action: 'manage' });
+                        head.appendChild(manageTheory);
+                    }
+                    wrap.appendChild(head);
+
+                    if (theme.theory) {
+                        const theoryBlock = MQ.el('div', 'mq-theory-block',
+                            '<h3>📖 Теоретический материал</h3>' +
+                            '<div class="mq-theory-body">' + theme.theory.replace(/\n/g, '<br>') + '</div>');
+                        wrap.appendChild(theoryBlock);
+                        setTimeout(() => MQ.math(theoryBlock), 100);
+                    } else {
+                        wrap.appendChild(MQ.el('div', 'mq-card mq-muted', 'Теория ещё не добавлена.'));
+                    }
+
+                    if (tasks.length) {
+                        const listHeader = MQ.el('div', 'mq-row mq-row--wrap',
+                            '<h3 style="margin:0">📝 Задачи по теме</h3>' +
+                            '<span class="mq-chip">' + tasks.length + ' задач</span>');
+                        wrap.appendChild(listHeader);
+                        const list = MQ.el('div', 'mq-stack');
+                        tasks.forEach(t => {
+                            list.appendChild(taskListItem(t, solvedIds));
+                        });
+                        wrap.appendChild(list);
+                    } else {
+                        wrap.appendChild(MQ.empty('Задач по этой теме пока нет', 'book'));
+                        if (isT) {
+                            const addHint = MQ.el('button', 'mq-btn mq-btn--primary mq-btn--sm',
+                                MQ.icon('plus', { size: 16 }) + 'Добавить первую задачу');
+                            addHint.onclick = () => MQ.taskDialog({ section: selectedTheme, grade: theme
+                                    .grade || null });
+                            wrap.appendChild(addHint);
+                        }
+                    }
+                    return wrap;
+                }
+
+                const themes = getAllThemes();
+                const themeKeys = Object.keys(themes);
+                const activeGrade = String(params.grade || '5');
+                const wrap = MQ.el('div', 'mq-stack mq-anim-in');
+
+                const head = MQ.el('div', 'mq-row mq-row--wrap',
+                    '<div><h2 style="margin:0">📚 Темы и задачи</h2>' +
+                    '<p class="mq-muted" style="margin:2px 0 0;font-size:14px">темы распределены по классам</p></div>');
+                if (isT) {
+                    const add = MQ.el('button', 'mq-btn mq-btn--primary', MQ.icon('plus', { size: 17 }) + 'Создать тему');
+                    add.onclick = () => themeDialog(null);
+                    head.appendChild(add);
+                }
+                wrap.appendChild(head);
+
+                const gradeTabs = MQ.el('div', 'mq-row mq-row--wrap');
+                [5, 6, 7, 8, 9, 10, 11].forEach(g => {
+                    const b = MQ.el('button', 'mq-btn mq-btn--sm ' + (activeGrade == g ? 'mq-btn--primary' :
+                        'mq-btn--ghost'), g + ' класс');
+                    b.onclick = () => MQ.go('themes', { grade: String(g) });
+                    gradeTabs.appendChild(b);
+                });
+                wrap.appendChild(gradeTabs);
+
+                const visibleThemeKeys = themeKeys.filter(k => String(themes[k].grade || 5) === activeGrade);
+                if (!visibleThemeKeys.length) {
+                    wrap.appendChild(MQ.empty(isT ? 'Тем для этого класса нет — создайте первую' : 'Тем для этого класса нет',
+                        'theme'));
+                    return wrap;
+                }
+
+                const counts = {};
+                for (const k of visibleThemeKeys) {
+                    const t = await getTasksForTheme(k);
+                    counts[k] = t.length;
+                }
+
+                const grid = MQ.el('div', 'mq-grid mq-grid--3');
+                visibleThemeKeys.forEach(k => {
+                    const theme = themes[k];
+                    const count = counts[k] || 0;
+                    const c = MQ.el('div', 'mq-card mq-card--hover mq-theme-card',
+                        '<div class="mq-row"><span class="mq-theme-icon ' + (theme.iconClass || '') + '">' +
+                        MQ.icon(theme.icon || 'ruler', { size: 28 }) + '</span>' +
+                        '<div style="flex:1"><h3 style="margin:0;font-size:16.5px">' + MQ.esc(theme.title) +
+                        '</h3>' +
+                        '<p class="mq-muted" style="margin:2px 0 0;font-size:13px">' + count +
+                        ' задач</p></div></div>' +
+                        (theme.theory ? '<div class="mq-hint" style="margin-top:8px">' +
+                            MQ.icon('lightbulb', { size: 14 }) + ' Есть теория</div>' : ''));
+                    c.onclick = () => MQ.go('themes', { theme: k });
+                    if (isT) {
+                        const row = MQ.el('div', 'mq-row mq-row--wrap');
+                        row.style.marginTop = '10px';
+                        const del = MQ.el('button', 'mq-btn mq-btn--ghost mq-btn--sm', MQ.icon('trash', { size: 14 }));
+                        del.onclick = async (e) => {
+                            e.stopPropagation();
+                            if (!await MQ.confirmBox('Удалить тему "' + theme.title + '" и все её задачи?'))
+                                return;
+                            const { data: tasks } = await MQ.sb.from('tasks').select('id').eq('section', k);
+                            if (tasks && tasks.length) {
+                                const ids = tasks.map(t => t.id);
+                                await MQ.sb.from('tasks').delete().in('id', ids);
+                            }
+                            const stored = JSON.parse(localStorage.getItem('imath_themes') || '{}');
+                            delete stored[k];
+                            localStorage.setItem('imath_themes', JSON.stringify(stored));
+                            delete THEMES_DATA[k];
+                            MQ.toast('Тема удалена', 'ok');
+                            MQ.render();
+                        };
+                        row.appendChild(del);
+                        c.appendChild(row);
+                    }
+                    grid.appendChild(c);
+                });
+                wrap.appendChild(grid);
+                return wrap;
+            };
+
+        })();
+    </script>
+
+    <!-- =====================================================================
+    B10 — ГЛАВНАЯ СТРАНИЦА
+    ===================================================================== -->
+    <script>
+        (function() {
+            'use strict';
+            const MQ = window.MQ;
+
+            const DIRECTIONS = [
+                { i: 'sigma', t: 'Математика 5–9 класс', d: 'Закрываем пробелы, разбираем программу на шаг вперёд школы.' },
+                { i: 'target', t: 'Подготовка к ВПР', d: 'Разбор структуры работы и тренировка типовых заданий.' },
+                { i: 'trophy', t: 'ОГЭ', d: 'Первая и вторая часть, оформление решений, тайминг.' },
+                { i: 'chart', t: 'ЕГЭ (база и профиль)', d: 'Стратегия по номерам и регулярные пробники.' },
+                { i: 'ruler', t: 'Геометрия', d: 'От чертежа к доказательству: учим видеть решение.' },
+                { i: 'lightbulb', t: 'Олимпиадные задачи', d: 'Нестандартное мышление для тех, кому мало учебника.' }
+            ];
+            const HOW = [
+                { i: 'chat', t: 'Знакомство', d: 'Бесплатная встреча: цели, уровень, удобное расписание.' },
+                { i: 'note', t: 'План занятий', d: 'Составляю программу под конкретную цель и сроки.' },
+                { i: 'game', t: 'Занятия и тренажёры', d: 'Урок, домашка в приложении, тренажёры без ограничений.' },
+                { i: 'star', t: 'Оценки и отчёты', d: 'Родитель видит журнал, средний балл и прогресс.' }
+            ];
+
+            const REVIEWS = [
+                { n: 'Ольга', r: 'мама ученика 6 класса', s: 5,
+                    t: 'Пришли с постоянными двойками за контрольные. Регина начала не с программы, а с пробелов за прошлый год — и через два месяца сын впервые сам сел за домашку.' },
+                { n: 'Мария', r: 'мама выпускницы, ОГЭ', s: 5,
+                    t: 'За год появилась уверенность: дочь перестала бояться геометрии, научилась аккуратно оформлять решения и спокойно выходит к доске.' },
+                { n: 'Артём', r: 'ученик 9 класса', s: 5,
+                    t: 'Объясняет так, что потом сам можешь рассказать решение, а не просто списать. Удобно, что домашка в приложении и сразу видно, проверено или нет.' },
+                { n: 'Светлана', r: 'мама ученика 8 класса', s: 5,
+                    t: 'Отдельное спасибо за журнал оценок. Я вижу средний балл и где просадка, и не приходится каждый вечер это выяснять через скандал.' },
+                { n: 'Андрей', r: 'ученик 10 класса, профильный ЕГЭ', s: 5,
+                    t: 'Максим объясняет сложные вещи простым языком. За полгода поднял уровень с тройки до уверенной четвёрки по профильной математике.' },
+                { n: 'Елена', r: 'мама ученика 8 класса', s: 5,
+                    t: 'Сын занимается с Максимом второй год. Оценки в школе стабильно 4 и 5, а главное — появился интерес к предмету.' },
+            ];
+
+            const FAQ = [
+                ['Как проходят занятия?', 'Онлайн, один на один, с интерактивной доской. Конспект остаётся у ученика.'],
+                ['Сколько длится занятие?', 'Стандартно 60 минут. Для младших классов возможны 45 минут.'],
+                ['Нужно ли платить за тренажёры?', 'Нет. Все тренажёры в приложении бесплатные и доступны без ограничений.'],
+                ['Как родителю следить за успехами?',
+                    'У родителя свой вход: журнал оценок со средним баллом, прогресс по задачам и домашние задания ребёнка.'
+                ],
+                ['Что даёт магазин баллов?',
+                    'За решённые задачи ученик получает баллы и обменивает их на подарки — это неплохо держит мотивацию у младших классов.'
+                ],
+                ['Что если нужно перенести урок?',
+                    'Предупредите минимум за 12 часов — перенесём на удобное время без потери оплаты.'
+                ]
+            ];
+
+            MQ.views.home = function() {
+                const C = MQ.CONTACT;
+                const M = MQ.MAXIM;
+                const wrap = MQ.el('div');
+
+                // HERO
+                wrap.appendChild(MQ.el('section', 'mq-hero mq-anim-in',
+                    '<span class="mq-chip mq-chip--brand">' + MQ.icon('sparkle', { size: 15 }) +
+                    'Первое занятие бесплатно</span>' +
+                    '<h1 style="margin-top:16px">Математика, которая наконец становится понятной</h1>' +
+                    '<p class="mq-hero__lead">iMath — занятия с преподавателем, домашние задания и журнал оценок ' +
+                    'в приложении, бесплатные тренажёры для ежедневной практики.</p>' +
+                    '<div class="mq-hero__cta">' +
+                    '<a class="mq-btn mq-btn--primary mq-btn--lg" href="' + C.telegram +
+                    '" target="_blank" rel="noopener">' +
+                    MQ.icon('telegram', { size: 19 }) + 'Записаться на занятие</a>' +
+                    '<button class="mq-btn mq-btn--ghost mq-btn--lg" data-go="games">' +
+                    MQ.icon('play', { size: 18 }) + 'Открыть тренажёры</button></div>' +
+                    '<div class="mq-hero__stats">' +
+                    '<div class="mq-hero__stat"><b>5–11</b><span>классы</span></div>' +
+                    '<div class="mq-hero__stat"><b>45</b><span>тренажёров</span></div>' +
+                    '<div class="mq-hero__stat"><b>1 на 1</b><span>формат занятий</span></div>' +
+                    '<div class="mq-hero__stat"><b>ВПР · ОГЭ · ЕГЭ</b><span>подготовка</span></div></div>'));
+
+                // НАПРАВЛЕНИЯ
+                const dirs = MQ.el('section', 'mq-section',
+                    '<div class="mq-section__head"><h2>Направления</h2>' +
+                    '<p>Программа собирается под цель ученика, а не под общий шаблон.</p></div>');
+                const dg = MQ.el('div', 'mq-grid mq-grid--3');
+                DIRECTIONS.forEach(d => dg.appendChild(MQ.el('div', 'mq-card mq-card--hover',
+                    MQ.iconBadge(d.i) + '<h3 style="margin:12px 0 6px;font-size:16.5px">' + d.t + '</h3>' +
+                    '<p class="mq-muted" style="margin:0;font-size:14px">' + d.d + '</p>')));
+                dirs.appendChild(dg);
+                wrap.appendChild(dirs);
+
+                // БЛОК РЕГИНЫ
+                wrap.appendChild(MQ.el('section', 'mq-section',
+                    '<div class="mq-card mq-card--pad-lg">' +
+                    '<div class="mq-card__head"><span class="mq-avatar" style="width:64px;height:64px;font-size:24px">' +
+                    MQ.esc(C.name.charAt(0)) + '</span><div><h2 style="margin:0 0 2px">' + MQ.esc(C.name) +
+                    '</h2>' +
+                    '<p class="mq-card__sub">' + MQ.esc(C.role) + '</p></div></div>' +
+                    '<p>Работаю с учениками 5–11 классов: от «ничего не понимаю» до подготовки к экзаменам. ' +
+                    'Объясняю без заученных формулировок, добиваюсь, чтобы ученик сам мог рассказать решение.</p>' +
+                    '<div class="mq-row mq-row--wrap" style="margin-top:14px">' +
+                    '<span class="mq-chip mq-chip--ok">' + MQ.icon('check', { size: 14 }) + 'Индивидуально</span>' +
+                    '<span class="mq-chip mq-chip--ok">' + MQ.icon('check', { size: 14 }) + 'Журнал для родителей</span>' +
+                    '<span class="mq-chip mq-chip--ok">' + MQ.icon('check', { size: 14 }) + 'Домашка с проверкой</span>' +
+                    '</div></div>'));
+
+                // БЛОК МАКСИМА
+                wrap.appendChild(MQ.el('section', 'mq-section',
+                    '<div class="mq-card mq-card--pad-lg">' +
+                    '<div class="mq-card__head"><span class="mq-avatar max" style="width:64px;height:64px;font-size:24px;background:linear-gradient(135deg,#0984e3,#74b9ff)">' +
+                    MQ.esc(M.name.charAt(0)) + '</span><div><h2 style="margin:0 0 2px">' + MQ.esc(M.name) +
+                    '</h2>' +
+                    '<p class="mq-card__sub">' + MQ.esc(M.role) + '</p></div></div>' +
+                    '<p>Помогаю ученикам 5–11 классов разобраться в математике раз и навсегда. ' +
+                    'Специализируюсь на подготовке к ОГЭ и ЕГЭ (профиль), а также на устранении пробелов в знаниях. ' +
+                    'На занятиях — никакой зубрёжки, только понимание и практика.</p>' +
+                    '<div class="mq-row mq-row--wrap" style="margin-top:14px">' +
+                    '<span class="mq-chip mq-chip--ok">' + MQ.icon('check', { size: 14 }) + 'Визуализация сложных тем</span>' +
+                    '<span class="mq-chip mq-chip--ok">' + MQ.icon('check', { size: 14 }) + 'Онлайн-доска и конспекты</span>' +
+                    '</div></div>'));
+
+                // КАК ЭТО РАБОТАЕТ
+                const how = MQ.el('section', 'mq-section',
+                    '<div class="mq-section__head"><h2>Как это работает</h2></div>');
+                const hg = MQ.el('div', 'mq-grid mq-grid--4');
+                HOW.forEach((s, i) => hg.appendChild(MQ.el('div', 'mq-card mq-card--hover',
+                    '<div class="mq-row">' + MQ.iconBadge(s.i) + '<span class="mq-chip">' + (i + 1) +
+                    '</span></div>' +
+                    '<h3 style="margin:12px 0 6px;font-size:16px">' + s.t + '</h3>' +
+                    '<p class="mq-muted" style="margin:0;font-size:14px">' + s.d + '</p>')));
+                how.appendChild(hg);
+                wrap.appendChild(how);
+
+                // ОТЗЫВЫ
+                const rev = MQ.el('section', 'mq-section',
+                    '<div class="mq-section__head"><h2>Отзывы</h2><p>Что говорят ученики и родители.</p></div>');
+                const rg = MQ.el('div', 'mq-grid mq-grid--3');
+                REVIEWS.forEach(r => {
+                    let stars = '';
+                    for (let i = 0; i < r.s; i++) stars += MQ.icon('star', { size: 16 });
+                    rg.appendChild(MQ.el('div', 'mq-card mq-card--hover',
+                        '<div class="mq-review"><div class="mq-review__stars">' + stars + '</div>' +
+                        '<p class="mq-review__text">«' + MQ.esc(r.t) + '»</p>' +
+                        '<div class="mq-review__who"><span class="mq-avatar" style="width:34px;height:34px;font-size:13px">' +
+                        MQ.esc(r.n.charAt(0)) + '</span><span><b>' + MQ.esc(r.n) + '</b>' +
+                        '<span class="mq-muted">' + MQ.esc(r.r) + '</span></span></div></div>'));
+                });
+                rev.appendChild(rg);
+                wrap.appendChild(rev);
+
+                // FAQ
+                const faq = MQ.el('section', 'mq-section',
+                    '<div class="mq-section__head"><h2>Частые вопросы</h2></div>');
+                FAQ.forEach(p => faq.appendChild(MQ.el('details', 'mq-faq',
+                    '<summary>' + MQ.esc(p[0]) + '</summary><div class="mq-faq__body">' + MQ.esc(p[1]) +
+                    '</div>')));
+                wrap.appendChild(faq);
+
+                // CTA
+                wrap.appendChild(MQ.el('section', 'mq-section',
+                    '<div class="mq-cta-band"><h2>Начнём с бесплатного занятия</h2>' +
+                    '<p>Познакомимся, определим уровень и составим план. Без обязательств.</p>' +
+                    '<a class="mq-btn mq-btn--lg" href="' + C.telegram + '" target="_blank" rel="noopener">' +
+                    MQ.icon('telegram', { size: 19 }) + 'Написать в Telegram</a></div>' +
+                    '<div class="mq-contacts" style="margin-top:26px">' +
+                    '<a class="mq-contact mq-contact--wa" href="' + C.whatsapp +
+                    '" target="_blank" rel="noopener">' +
+                    MQ.icon('whatsapp', { size: 18 }) + 'WhatsApp</a>' +
+                    '<a class="mq-contact mq-contact--tg" href="' + C.telegram +
+                    '" target="_blank" rel="noopener">' +
+                    MQ.icon('telegram', { size: 18 }) + 'Telegram</a>' +
+                    '<a class="mq-contact mq-contact--tel" href="tel:' + C.phoneRaw + '">' +
+                    MQ.icon('phone', { size: 18 }) + MQ.esc(C.phone) + '</a>' +
+                    '<a class="mq-contact" href="mailto:' + C.email + '">' +
+                    MQ.icon('mail', { size: 18 }) + MQ.esc(C.email) + '</a></div>'));
+
+                // ФУТЕР — без имён
+                wrap.appendChild(MQ.el('footer', 'mq-footer',
+                    'iMath · ' + new Date().getFullYear() +
+                    '<br>Онлайн-занятия по математике, тренажёры и журнал оценок'));
+                return wrap;
+            };
+        })();
+    </script>
+
 </body>
 </html>
