@@ -299,6 +299,8 @@ button,input,textarea,select{font:inherit;color:inherit}
 .mq-drill__opt.is-wrong{border-color:var(--err);background:color-mix(in srgb,var(--err) 13%,transparent);color:var(--err)}
 .mq-progress{height:8px;border-radius:4px;background:var(--line);overflow:hidden}
 .mq-progress>i{display:block;height:100%;background:var(--grad);width:0;transition:width .35s var(--ease)}
+.mq-mini{max-width:440px;margin:auto}.mq-mini-board{--cols:4;display:grid;grid-template-columns:repeat(var(--cols),1fr);gap:5px;margin:14px auto;max-width:400px}.mq-mini-cell{aspect-ratio:1;border:1px solid var(--line);border-radius:9px;background:var(--surface-2);display:grid;place-items:center;font-weight:800;font-size:20px;min-width:0;text-align:center}.mq-mini-cell.is-selected{outline:3px solid var(--brand)}.mq-mini-board--8{gap:2px}.mq-mini-board--8 .mq-mini-cell{border-radius:3px;font-size:clamp(16px,5vw,25px)}.mq-mini-question{font-size:14px;padding:4px}.mq-mini-question input{width:90%;border:0;border-bottom:1px solid var(--brand);background:transparent;text-align:center}.mq-mini-controls{display:flex;justify-content:center;gap:8px;margin-top:12px}.mq-mini-controls button{width:48px;height:42px;border:1px solid var(--line);border-radius:9px;background:var(--surface);font-size:20px}.mq-tetris{display:grid;grid-template-columns:repeat(10,18px);gap:2px;justify-content:center}.mq-tetris i{width:18px;height:18px;background:var(--line);border-radius:3px}.mq-tetris i.on{background:var(--brand)}
+
 /* ===== БАНК ЗАДАЧ / РЕДАКТОР ===== */
 .mq-task-body{font-size:15px;line-height:1.65}
 .mq-task-body img{max-width:100%;border-radius:10px;margin:8px 0}
@@ -1628,15 +1630,72 @@ MQ.views.games = async function(){
 
 <script>
 /* =====================================================================
-   B5.1 — ИГРОВАЯ
+   B5.1 — ИГРОВАЯ: десять настоящих мини-игр
    ===================================================================== */
 (function(){
-'use strict';const MQ=window.MQ;
-const games=[['Тетрис','Собирайте линии из фигур'],['Пятнашки','Расставьте числа по порядку'],['Морской бой','Найдите корабли соперника'],['Шашки','Продумывайте комбинации'],['Шахматы','Тренируйте стратегию'],['Судоку','Заполните поле цифрами'],['Мемори','Найдите одинаковые пары'],['Змейка','Собирайте очки'],['2048','Объединяйте одинаковые числа'],['Математическое бинго','Решайте примеры на скорость']];
-function play(g){let score=0,time=20;const box=MQ.el('div','mq-center','<p>'+MQ.esc(g[1])+'</p><div style="font-size:54px;margin:18px">🎯</div><p><b data-score>0</b> очков · <b data-time>20</b> сек.</p><button class="mq-btn mq-btn--primary mq-btn--lg" data-hit>Играть</button>');const close=MQ.modalNode(g[0],box,'Закрыть',(_,done)=>done());const timer=setInterval(()=>{time--;box.querySelector('[data-time]').textContent=time;if(time<=0){clearInterval(timer);box.querySelector('[data-hit]').disabled=true;MQ.toast('Игра окончена: '+score+' очков','ok')}},1000);box.querySelector('[data-hit]').onclick=()=>{score++;box.querySelector('[data-score]').textContent=score};}
-MQ.views.arcade=function(){const wrap=MQ.el('div','mq-stack mq-anim-in','<div><h2 style="margin:0">Игры</h2><p class="mq-muted">10 игр для логики, внимания и отдыха между занятиями</p></div>'),grid=MQ.el('div','mq-grid mq-grid--3');games.forEach((g,i)=>{const c=MQ.el('button','mq-card mq-card--hover','<div style="font-size:34px">'+['🧱','🔢','🚢','⛀','♟','9️⃣','🃏','🐍','✨','🎯'][i]+'</div><h3 style="margin-top:8px">'+g[0]+'</h3><p class="mq-muted">'+g[1]+'</p>');c.style.textAlign='left';c.style.cursor='pointer';c.onclick=()=>play(g);grid.appendChild(c)});wrap.appendChild(grid);return wrap};
+'use strict';
+const MQ=window.MQ;
+const GAMES=[
+  ['tetris','Тетрис','Собирайте заполненные линии','🧱'],
+  ['fifteen','Пятнашки','Расставьте числа от 1 до 15','🔢'],
+  ['battle','Морской бой','Найдите все пять кораблей','🚢'],
+  ['checkers','Шашки','Играйте вдвоём на одном устройстве','⛀'],
+  ['chess','Шахматы','Упрощённая партия для двух игроков','♟'],
+  ['sudoku','Судоку','Заполните поле 4 × 4','9️⃣'],
+  ['memory','Мемори','Найдите одинаковые пары','🃏'],
+  ['snake','Змейка','Управляйте стрелками','🐍'],
+  ['2048','2048','Соединяйте одинаковые числа','✨'],
+  ['bingo','Математическое бинго','Решите девять примеров','🎯']
+];
+const shuffle=a=>a.map(x=>[Math.random(),x]).sort((a,b)=>a[0]-b[0]).map(x=>x[1]);
+function board(root,cols,cells){root.innerHTML='<div class="mq-mini-board" style="--cols:'+cols+'">'+cells.join('')+'</div>';return root.firstChild}
+function modal(title,node){MQ.modalNode(title,node,'Закрыть',(_,close)=>close());}
+function fifteen(){
+  const root=MQ.el('div','mq-mini'), nums=shuffle([...Array(15)].map((_,i)=>i+1).concat(0));
+  function draw(){const b=board(root,4,nums.map((n,i)=>'<button data-i="'+i+'" class="mq-mini-cell">'+(n||'')+'</button>'));b.onclick=e=>{const i=+e.target.dataset.i,z=nums.indexOf(0);if([i-1,i+1,i-4,i+4].includes(z)&&!(Math.abs(i-z)===1&&Math.floor(i/4)!==Math.floor(z/4))){[nums[i],nums[z]]=[nums[z],nums[i]];draw();if(nums.slice(0,15).every((n,j)=>n===j+1))MQ.toast('Пятнашки собраны!','ok')}}} draw();return root;
+}
+function memory(){
+  const root=MQ.el('div','mq-mini'), vals=shuffle(['π','√','∑','∞','△','×','π','√','∑','∞','△','×']);let open=[],done=[];
+  function draw(){const b=board(root,4,vals.map((v,i)=>'<button data-i="'+i+'" class="mq-mini-cell">'+(open.includes(i)||done.includes(i)?v:'?')+'</button>'));b.onclick=e=>{const i=+e.target.dataset.i;if(open.length===2||open.includes(i)||done.includes(i))return;open.push(i);draw();if(open.length===2)setTimeout(()=>{if(vals[open[0]]===vals[open[1]])done.push(...open);open=[];draw();if(done.length===vals.length)MQ.toast('Все пары найдены!','ok')},500)}}draw();return root;
+}
+function battle(){
+  const root=MQ.el('div','mq-mini'), ships=new Set(shuffle([...Array(25).keys()]).slice(0,5)), shots=new Set();
+  function draw(){root.innerHTML='<p class="mq-center"><b>'+(ships.size-[...shots].filter(x=>ships.has(x)).length)+'</b> кораблей осталось</p>';const b=board(root,5,[...Array(25)].map((_,i)=>'<button data-i="'+i+'" class="mq-mini-cell">'+(shots.has(i)?(ships.has(i)?'🔥':'·'):'~')+'</button>'));b.onclick=e=>{shots.add(+e.target.dataset.i);draw();if([...ships].every(x=>shots.has(x)))MQ.toast('Флот найден!','ok')}}draw();return root;
+}
+function sudoku(){
+  const root=MQ.el('div','mq-mini');const solution=[1,2,3,4,3,4,1,2,2,1,4,3,4,3,2,1],fixed=new Set([0,3,5,6,9,10,12,15]);
+  root.innerHTML='<div class="mq-mini-board" style="--cols:4">'+solution.map((v,i)=>fixed.has(i)?'<b class="mq-mini-cell">'+v+'</b>':'<input class="mq-mini-cell" data-i="'+i+'" inputmode="numeric" maxlength="1">').join('')+'</div><button class="mq-btn mq-btn--primary mq-btn--block" data-check>Проверить</button>';
+  root.querySelector('[data-check]').onclick=()=>{const ok=[...root.querySelectorAll('input')].every(x=>+x.value===solution[+x.dataset.i]);MQ.toast(ok?'Судоку решено!':'Есть ошибки',ok?'ok':'warn')};return root;
+}
+function bingo(){
+  const root=MQ.el('div','mq-mini'), qs=[...Array(9)].map(()=>{const a=2+Math.floor(Math.random()*9),b=2+Math.floor(Math.random()*9);return[a,b,a*b]});
+  root.innerHTML='<div class="mq-mini-board" style="--cols:3">'+qs.map((q,i)=>'<label class="mq-mini-cell mq-mini-question">'+q[0]+'×'+q[1]+'<input data-i="'+i+'" inputmode="numeric"></label>').join('')+'</div><button class="mq-btn mq-btn--primary mq-btn--block" data-check>Проверить бинго</button>';
+  root.querySelector('[data-check]').onclick=()=>{const n=[...root.querySelectorAll('input')].filter(x=>+x.value===qs[+x.dataset.i][2]).length;MQ.toast(n===9?'Бинго! Все ответы верны':'Верно: '+n+' из 9',n===9?'ok':'info')};return root;
+}
+function game2048(){
+  const root=MQ.el('div','mq-mini'), a=Array(16).fill(0);function add(){const z=a.map((x,i)=>x?null:i).filter(x=>x!==null);if(z.length)a[z[Math.floor(Math.random()*z.length)]]=Math.random()<.9?2:4}add();add();
+  const line=x=>{x=x.filter(Boolean);for(let i=0;i<x.length-1;i++)if(x[i]===x[i+1]){x[i]*=2;x.splice(i+1,1)}return x.concat(Array(4-x.length).fill(0))};
+  function move(d){let old=a.join();for(let r=0;r<4;r++){let ids=d==='L'||d==='R'?[0,1,2,3].map(c=>r*4+c):[0,1,2,3].map(c=>c*4+r);let v=ids.map(i=>a[i]);if(d==='R'||d==='D')v.reverse();v=line(v);if(d==='R'||d==='D')v.reverse();ids.forEach((i,j)=>a[i]=v[j])}if(a.join()!==old)add();draw()}
+  function draw(){root.innerHTML='<p class="mq-center">Используйте кнопки или стрелки</p><div class="mq-mini-board" style="--cols:4">'+a.map(x=>'<b class="mq-mini-cell">'+(x||'')+'</b>').join('')+'</div><div class="mq-mini-controls"><button>←</button><button>↑</button><button>↓</button><button>→</button></div>';[...root.querySelectorAll('.mq-mini-controls button')].forEach((b,i)=>b.onclick=()=>move(['L','U','D','R'][i]))}draw();return root;
+}
+function gridGame(kind){
+  const root=MQ.el('div','mq-mini'), chess=kind==='chess', pieces=chess?['♜','♞','♝','♛','♚','♝','♞','♜',...Array(8).fill('♟'),...Array(32).fill(''),...Array(8).fill('♙'),'♖','♘','♗','♕','♔','♗','♘','♖']:[...Array(64)].map((_,i)=>{const r=Math.floor(i/8),c=i%8;if((r+c)%2===0)return'';return r<3?'●':r>4?'○':''});let selected=-1,turn=0;
+  function draw(){root.innerHTML='<p class="mq-center">Ходят: <b>'+(chess?(turn?'белые':'чёрные'):(turn?'○':'●'))+'</b></p><div class="mq-mini-board mq-mini-board--8" style="--cols:8">'+pieces.map((p,i)=>'<button data-i="'+i+'" class="mq-mini-cell '+(selected===i?'is-selected':'')+'">'+p+'</button>').join('')+'</div>';root.querySelector('.mq-mini-board').onclick=e=>{const i=+e.target.dataset.i;if(selected<0){if(pieces[i]){selected=i;draw()}return}if(i!==selected){pieces[i]=pieces[selected];pieces[selected]='';turn=1-turn}selected=-1;draw()}}draw();return root;
+}
+function tetris(){
+  const root=MQ.el('div','mq-mini'), w=10,h=16,a=Array(w*h).fill(0);let x=4,y=0,score=0,over=false;
+  function fits(nx,ny){return ny<h&&nx>=0&&nx<w&&!a[ny*w+nx]}function settle(){a[y*w+x]=1;for(let r=h-1;r>=0;r--)if(a.slice(r*w,r*w+w).every(Boolean)){a.splice(r*w,w);a.unshift(...Array(w).fill(0));score++;r++}x=4;y=0;if(!fits(x,y))over=true}
+  function step(){if(over||!root.isConnected)return;if(fits(x,y+1))y++;else settle();draw();setTimeout(step,350)}function move(dx){if(fits(x+dx,y))x+=dx;draw()}function draw(){root.innerHTML='<p class="mq-center">Линии: <b>'+score+'</b></p><div class="mq-tetris">'+a.map((v,i)=>'<i class="'+(y-Mi===y*w+x?'on':'')+'"></i>').join('')+'</div><div class="mq-mini-controls"><button>←</button><button>↓</button><button>→</button></div>';const bs=root.querySelectorAll('button');bs[0].onclick=()=>move(-1);bs[1].onclick=()=>{if(fits(x,y+1))y++;draw()};bs[2].onclick=()=>move(1)}draw();setTimeout(step,350);return root;
+}
+function snake(){
+  const root=MQ.el('div','mq-mini'), canvas=MQ.el('canvas');canvas.width=300;canvas.height=300;root.appendChild(canvas);root.appendChild(MQ.el('div','mq-mini-controls','<button>←</button><button>↑</button><button>↓</button><button>→</button>'));let snake=[[7,7]],dir=[1,0],food=[3,3],score=0;
+  const dirs=[[-1,0],[0,-1],[0,1],[1,0]];root.querySelectorAll('button').forEach((b,i)=>b.onclick=()=>dir=dirs[i]);function tick(){if(!root.isConnected)return;const n=[snake[0][0]+dir[0],snake[0][1]+dir[1]];if(n[0]<0||n[1]<0||n[0]>=15||n[1]>=15||snake.some(p=>p[0]===n[0]&&p[1]===n[1])){MQ.toast('Змейка: '+score+' очков','info');return}snake.unshift(n);if(n[0]===food[0]&&n[1]===food[1]){score++;food=[Math.floor(Math.random()*15),Math.floor(Math.random()*15)]}else snake.pop();const c=canvas.getContext('2d');c.fillStyle='#eef0fa';c.fillRect(0,0,300,300);c.fillStyle='#6c5ce7';snake.forEach(p=>c.fillRect(p[0]*20+1,p[1]*20+1,18,18));c.fillStyle='#e17055';c.fillRect(food[0]*20+2,food[1]*20+2,16,16);setTimeout(tick,150)}tick();return root;
+}
+function openGame(k){const factories={tetris,fifteen,battle,checkers:()=>gridGame('checkers'),chess:()=>gridGame('chess'),sudoku,memory,snake,'2048':game2048,bingo};const g=GAMES.find(x=>x[0]===k);modal(g[1],factories[k]())}
+MQ.views.arcade=function(){const wrap=MQ.el('div','mq-stack mq-anim-in','<div><h2 style="margin:0">Игры</h2><p class="mq-muted">Полноценные мини-игры — выберите и играйте</p></div>'),grid=MQ.el('div','mq-grid mq-grid--3');GAMES.forEach(g=>{const c=MQ.el('button','mq-card mq-card--hover','<div style="font-size:34px">'+g[3]+'</div><h3 style="margin-top:8px">'+g[1]+'</h3><p class="mq-muted">'+g[2]+'</p>');c.onclick=()=>openGame(g[0]);grid.appendChild(c)});wrap.appendChild(grid);return wrap};
 })();
 </script>
+
 
 <script>
 /* =====================================================================
@@ -2410,26 +2469,16 @@ MQ.richEditor = editor;
 async function taskDialog(task){
   const t = task || {};
   const ed = editor(t.statement_html || (t.statement ? MQ.esc(t.statement) : ''));
+  const solutionEd = editor(t.solution || '');
   const form = MQ.el('div','mq-stack',
     '<label class="mq-field"><span class="mq-label">Название / номер</span>' +
     '<input class="mq-input" id="tkT" value="' + MQ.esc(t.title || '') + '" placeholder="Задание 6"></label>' +
     '<div class="mq-row mq-row--wrap">' +
-      '<label class="mq-field" style="flex:1;min-width:110px"><span class="mq-label">Класс</span>' +
-      '<select class="mq-select" id="tkG"><option value="">—</option>' +
-      GRADES.map(g => '<option value="' + g + '"' + (t.grade == g ? ' selected' : '') + '>' +
-        g + ' класс</option>').join('') + '</select></label>' +
-      '<label class="mq-field" style="flex:1;min-width:130px"><span class="mq-label">Раздел</span>' +
-      '<select class="mq-select" id="tkS">' +
-      SECT.map(s => '<option value="' + s[0] + '"' + (t.section === s[0] ? ' selected' : '') + '>' +
-        s[1] + '</option>').join('') + '</select></label>' +
       '<label class="mq-field" style="flex:1;min-width:110px"><span class="mq-label">Экзамен</span>' +
-      '<select class="mq-select" id="tkE"><option value="">—</option>' +
+      '<select class="mq-select" id="tkE"><option value="vpr"' + (t.exam === 'vpr' ? ' selected' : '') + '>ВПР</option>' +
       '<option value="oge"' + (t.exam === 'oge' ? ' selected' : '') + '>ОГЭ</option>' +
       '<option value="ege-profile"' + (t.exam === 'ege-profile' ? ' selected' : '') + '>ЕГЭ профиль</option>' +
-      '<option value="ege-base"' + (t.exam === 'ege-base' ? ' selected' : '') + '>ЕГЭ база</option></select></label>' +
-      '<label class="mq-field" style="max-width:120px"><span class="mq-label">Сложность</span>' +
-      '<input class="mq-input" id="tkD" type="number" min="1" max="5" value="' +
-      (t.difficulty || 1) + '"></label></div>' +
+      '<option value="ege-base"' + (t.exam === 'ege-base' ? ' selected' : '') + '>ЕГЭ база</option></select></label></div>' +
     '<label class="mq-field"><span class="mq-label">Изображение к задаче (необязательно)</span>' +
     '<input class="mq-input" id="tkImg" type="file" accept="image/*"></label>' +
     (t.image_path ? '<div id="tkImgPrev"><img src="' + MQ.pubUrl('tasks', t.image_path) + '" style="max-height:120px;border-radius:8px"></div>' : '<div id="tkImgPrev"></div>') +
@@ -2438,8 +2487,9 @@ async function taskDialog(task){
   form.appendChild(MQ.el('div','mq-stack',
     '<label class="mq-field"><span class="mq-label">Ответ</span>' +
     '<input class="mq-input" id="tkA" value="' + MQ.esc(t.answer || '') + '"></label>' +
-    '<label class="mq-field"><span class="mq-label">Решение (необязательно)</span>' +
-    '<textarea class="mq-textarea" id="tkSol">' + MQ.esc(t.solution || '') + '</textarea></label>' +
+    '<span class="mq-label">Решение (текст и LaTeX)</span>'));
+  form.appendChild(solutionEd.node);
+  form.appendChild(MQ.el('div','mq-stack',
     '<label class="mq-field"><span class="mq-label">Баллы за решение</span>' +
     '<input class="mq-input" id="tkReward" type="number" min="0" value="' + (t.reward_points || 0) + '"></label>'));
 
@@ -2465,17 +2515,13 @@ async function taskDialog(task){
         if (error){ MQ.toast(error.message,'err'); go.disabled = false; return; }
         image_path = p;
       }
-      const g = MQ.$('#tkG', form).value;
       const row = {
         title: MQ.$('#tkT', form).value.trim() || null,
         statement_html: ed.html,
         statement: ed.text.slice(0,2000),
-        section: MQ.$('#tkS', form).value,
-        exam: MQ.$('#tkE', form).value || null,
-        grade: g ? parseInt(g,10) : null,
-        difficulty: Math.max(1, Math.min(5, parseInt(MQ.$('#tkD', form).value,10) || 1)),
+        section:'fipi', exam:MQ.$('#tkE', form).value, grade:null, difficulty:1,
         answer: MQ.$('#tkA', form).value.trim() || null,
-        solution: MQ.$('#tkSol', form).value.trim() || null,
+        solution: solutionEd.html || null,
         image_path: image_path,
         reward_points: Math.max(0, parseInt(MQ.$('#tkReward', form).value,10) || 0),
         author_id: MQ.user.id
@@ -2487,7 +2533,17 @@ async function taskDialog(task){
     });
 }
 
-// Диалог решения задачи учеником
+function showTaskResult(task, title){
+  const result = MQ.el('div','mq-stack',
+    '<div class="mq-card"><b>Правильный ответ</b><div class="mq-task-body" style="margin-top:8px">' +
+    MQ.esc(task.answer || 'Не указан') + '</div></div>' +
+    '<div class="mq-card"><b>Решение</b><div class="mq-task-body" style="margin-top:8px">' +
+    (task.solution || 'Решение пока не добавлено') + '</div></div>');
+  MQ.modalNode(title || 'Ответ и решение', result, 'Закрыть', (_, done) => done());
+  MQ.math(result);
+}
+
+// Ответ и решение становятся доступны ученику только после отправки своего ответа
 async function solveTaskDialog(task) {
   const form = MQ.el('div','mq-stack');
   const body = MQ.el('div','mq-task-body');
@@ -2538,17 +2594,17 @@ async function solveTaskDialog(task) {
     } else if (correct) {
       MQ.toast('Правильно!', 'ok');
     } else {
-      MQ.toast('Неправильно. Попробуйте ещё раз', 'err');
+      MQ.toast('Ответ принят — сравните с решением', 'info');
     }
     close();
-    MQ.render();
+    showTaskResult(task, correct ? 'Верно!' : 'Проверьте решение');
   });
 }
 
 // Обновлённый вид банка задач
 MQ.views.bank = async function(){
   const isT = MQ.isTeacher();
-  const f = MQ.params.filter || { grade:'', section:'', exam:'oge' };
+  const exam = MQ.params.exam || 'vpr';
   const wrap = MQ.el('div','mq-stack mq-anim-in');
   const head = MQ.el('div','mq-row mq-row--wrap','<h2 style="margin:0">Банк ФИПИ</h2><div class="mq-spacer"></div>');
   if (isT){
@@ -2558,26 +2614,14 @@ MQ.views.bank = async function(){
   }
   wrap.appendChild(head);
 
-  const bar = MQ.el('div','mq-card',
-    '<div class="mq-row mq-row--wrap">' +
-    '<select class="mq-select" id="fG" style="max-width:150px"><option value="">Все классы</option>' +
-    GRADES.map(g => '<option value="' + g + '"' + (f.grade == g ? ' selected' : '') + '>' +
-      g + ' класс</option>').join('') + '</select>' +
-    '<select class="mq-select" id="fS" style="max-width:170px"><option value="">Все разделы</option>' +
-    SECT.map(s => '<option value="' + s[0] + '"' + (f.section === s[0] ? ' selected' : '') + '>' +
-      s[1] + '</option>').join('') + '</select>' +
-    '<select class="mq-select" id="fE" style="max-width:180px"><option value="oge">ОГЭ</option>' +
-    '<option value="ege-profile"' + (f.exam === 'ege-profile' ? ' selected' : '') + '>ЕГЭ профиль</option>' +
-    '<option value="ege-base"' + (f.exam === 'ege-base' ? ' selected' : '') + '>ЕГЭ база</option></select></div>');
-  wrap.appendChild(bar);
-  ['fG','fS','fE'].forEach(id => MQ.$('#' + id, bar).onchange = () =>
-    MQ.go('bank',{ filter:{ grade:MQ.$('#fG', bar).value,
-      section:MQ.$('#fS', bar).value, exam:MQ.$('#fE', bar).value }}));
+  const tabs=MQ.el('div','mq-row mq-row--wrap');
+  [['vpr','ВПР'],['oge','ОГЭ'],['ege-profile','ЕГЭ профиль'],['ege-base','ЕГЭ база']].forEach(x=>{
+    const b=MQ.el('button','mq-btn mq-btn--sm '+(exam===x[0]?'mq-btn--primary':'mq-btn--ghost'),x[1]);
+    b.onclick=()=>MQ.go('bank',{exam:x[0]}); tabs.appendChild(b);
+  });
+  wrap.appendChild(tabs);
 
-  let q = MQ.sb.from('tasks').select('*').order('created_at',{ ascending:false }).limit(80);
-  if (f.grade)   q = q.eq('grade', parseInt(f.grade,10));
-  if (f.section) q = q.eq('section', f.section);
-  if (f.exam)    q = q.eq('exam', f.exam);
+  let q = MQ.sb.from('tasks').select('*').eq('exam',exam).order('created_at',{ ascending:false }).limit(80);
   const { data: tasks, error } = await q;
   if (error) throw error;
 
@@ -2597,11 +2641,9 @@ MQ.views.bank = async function(){
     const c = MQ.el('div','mq-card mq-card--hover');
     c.innerHTML = '<div class="mq-card__head">' + MQ.iconBadge('book') +
       '<div style="flex:1;min-width:0"><h3 class="mq-card__title">' +
-      MQ.esc(t.title || 'Задача №' + t.id) + '</h3><p class="mq-card__sub">' + secName(t.section) +
-      (t.grade ? ' · ' + t.grade + ' класс' : '') +
-      (t.exam ? ' · ' + ({oge:'ОГЭ','ege-profile':'ЕГЭ профиль','ege-base':'ЕГЭ база'}[t.exam] || t.exam.toUpperCase()) : '') +
+      MQ.esc(t.title || 'Задача №' + t.id) + '</h3><p class="mq-card__sub">' +
+      (t.exam ? ({vpr:'ВПР',oge:'ОГЭ','ege-profile':'ЕГЭ профиль','ege-base':'ЕГЭ база'}[t.exam] || t.exam.toUpperCase()) : '') +
       ' · источник: ФИПИ' +
-      ' · сложность ' + t.difficulty +
       (t.reward_points > 0 ? ' · <b class="mq-chip mq-chip--ok" style="font-size:12px">+' + t.reward_points + ' баллов</b>' : '') +
       '</p></div>' +
       (isT ? '<span class="mq-chip">' + (solvedIds.length || 0) + ' решили</span>' : '') +
@@ -2618,15 +2660,15 @@ MQ.views.bank = async function(){
 
     const row = MQ.el('div','mq-row mq-row--wrap');
     row.style.marginTop = '12px';
-    if (t.answer){
+    if (isT && t.answer){
       const sh = MQ.el('button','mq-btn mq-btn--ghost mq-btn--sm', MQ.icon('eye',{size:15}) + 'Ответ');
       const ans = MQ.el('span','mq-chip mq-chip--ok mq-hide', MQ.esc(t.answer));
       sh.onclick = () => ans.classList.toggle('mq-hide');
       row.appendChild(sh); row.appendChild(ans);
     }
-    if (t.solution){
+    if (isT && t.solution){
       const sl = MQ.el('button','mq-btn mq-btn--ghost mq-btn--sm', MQ.icon('lightbulb',{size:15}) + 'Решение');
-      sl.onclick = () => MQ.alertBox(t.solution,'Решение');
+      sl.onclick = () => { const n=MQ.el('div','mq-task-body',t.solution); MQ.modalNode('Решение',n,'Закрыть',(_,done)=>done()); MQ.math(n); };
       row.appendChild(sl);
     }
     if (isT){
@@ -2646,6 +2688,8 @@ MQ.views.bank = async function(){
       );
       if (!alreadySolved) {
         btn.onclick = () => solveTaskDialog(t);
+      } else {
+        btn.onclick = () => showTaskResult(t);
       }
       row.appendChild(btn);
     }
@@ -2716,12 +2760,7 @@ async function paperDialog(){
     '<div class="mq-row mq-row--wrap">' +
       '<label class="mq-field" style="flex:1;min-width:110px"><span class="mq-label">Экзамен</span>' +
       '<select class="mq-select" id="epE">' +
-      EXAMS.map(e => '<option value="' + e[0] + '">' + e[1] + '</option>').join('') + '</select></label>' +
-      '<label class="mq-field" style="flex:1;min-width:100px"><span class="mq-label">Класс</span>' +
-      '<select class="mq-select" id="epG"><option value="">—</option>' +
-      GRADES.map(g => '<option value="' + g + '">' + g + '</option>').join('') + '</select></label>' +
-      '<label class="mq-field" style="flex:1;min-width:100px"><span class="mq-label">Вариант</span>' +
-      '<input class="mq-input" id="epV" placeholder="12"></label></div>');
+      EXAMS.map(e => '<option value="' + e[0] + '">' + e[1] + '</option>').join('') + '</select></label></div>');
   form.appendChild(dz.node);
 
   MQ.modalNode('Загрузить пробник', form, 'Загрузить', async (go, close) => {
@@ -2731,11 +2770,9 @@ async function paperDialog(){
     go.disabled = true;
     go.innerHTML = MQ.icon('refresh',{size:17,cls:'mq-spin'}) + 'Загрузка...';
     const files = await dz.upload('exams','papers');
-    const g = MQ.$('#epG', form).value;
     const { error } = await MQ.sb.from('exam_papers').insert({
       title, exam:MQ.$('#epE', form).value,
-      grade: g ? parseInt(g,10) : null,
-      variant:MQ.$('#epV', form).value.trim() || null,
+      grade:null, variant:null,
       files, author_id:MQ.user.id });
     if (error){ MQ.toast(error.message,'err'); go.disabled = false; return; }
     close(); MQ.toast('Пробник загружен','ok'); MQ.render();
@@ -2763,16 +2800,6 @@ MQ.views.exams = async function(){
     tabs.appendChild(b);
   });
   wrap.appendChild(tabs);
-
-  const hint = MQ.el('div','mq-card',
-    '<div class="mq-row">' + MQ.iconBadge('lightbulb','info') +
-    '<div><b>Тренировка по заданиям</b><p class="mq-muted" style="margin:2px 0 0;font-size:13.5px">' +
-    'Задачи этих экзаменов лежат в банке задач — с фильтром по классу и типу.</p></div></div>');
-  const bh = MQ.el('button','mq-btn mq-btn--ghost mq-btn--sm', MQ.icon('book',{size:15}) + 'Открыть банк задач');
-  bh.style.marginTop = '10px';
-  bh.onclick = () => MQ.go('bank',{ filter:{ grade:'', section:'', exam:cur || '' } });
-  hint.appendChild(bh);
-  wrap.appendChild(hint);
 
   let q = MQ.sb.from('exam_papers').select('*').order('created_at',{ ascending:false }).limit(60);
   if (cur) q = q.eq('exam', cur);
