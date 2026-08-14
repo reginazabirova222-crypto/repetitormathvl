@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 /* ===== ПЕРЕМЕННЫЕ ===== */
@@ -336,6 +337,8 @@ button,input,textarea,select{font:inherit;color:inherit}
 .mq-section{padding:54px 0}
 .mq-section__head{text-align:center;max-width:620px;margin:0 auto 34px}
 .mq-section__head p{color:var(--muted)}
+.mq-how-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:16px;max-width:1120px;margin:0 auto}
+@media(max-width:900px){.mq-how-grid{grid-template-columns:1fr}.mq-how-grid .mq-card{text-align:center}.mq-how-grid .mq-row{justify-content:center}}
 .mq-review{display:flex;flex-direction:column;gap:12px;height:100%}
 .mq-review__stars{color:var(--warn);display:flex;gap:2px}
 .mq-review__text{flex:1;font-size:15px;line-height:1.6}
@@ -661,7 +664,7 @@ MQ.CONTACT = {
   name:'Регина', role:'репетитор по математике',
   phone:'+7 951 015-19-57', phoneRaw:'+79510151957',
   whatsapp:'https://wa.me/79510151957',
-  telegram:'https://t.me/+79510151957',
+  telegram:'https://t.me/regina_zabirova',
   max:'', email:'reginazabirova222@gmail.com'
 };
 
@@ -1228,8 +1231,22 @@ function attachList(arr, bucket){
   return box;
 }
 
+async function submissionPdf(files){
+  if (!window.PDFLib) throw new Error('Модуль PDF не загрузился');
+  const out=await PDFLib.PDFDocument.create();
+  for(const f of files){
+    const bytes=await f.arrayBuffer();
+    if(f.type==='application/pdf'||/\.pdf$/i.test(f.name)){
+      const src=await PDFLib.PDFDocument.load(bytes), pages=await out.copyPages(src,src.getPageIndices());pages.forEach(p=>out.addPage(p));
+    }else if((f.type||'').startsWith('image/')){
+      const img=f.type==='image/png'?await out.embedPng(bytes):await out.embedJpg(bytes), page=out.addPage([595,842]), scale=Math.min(555/img.width,802/img.height,1);page.drawImage(img,{x:(595-img.width*scale)/2,y:(842-img.height*scale)/2,width:img.width*scale,height:img.height*scale});
+    }else throw new Error('Файл «'+f.name+'» нельзя преобразовать. Используйте PDF, JPG или PNG.');
+  }
+  return new File([await out.save()],'домашняя-работа.pdf',{type:'application/pdf'});
+}
+
 async function submitDialog(hw){
-  const dz = MQ.dropzone({ title:'Прикрепите решение', max:10 });
+  const dz = MQ.dropzone({ title:'Прикрепите решение', hint:'PDF, JPG или PNG · всё будет объединено в один PDF', max:10 });
   const wrap = MQ.el('div','mq-stack',
     '<label class="mq-field"><span class="mq-label">Комментарий (необязательно)</span>' +
     '<textarea class="mq-textarea" id="sbCom" placeholder="Что было сложно?"></textarea></label>');
@@ -1238,6 +1255,8 @@ async function submitDialog(hw){
     if (!dz.files.length){ MQ.toast('Прикрепите хотя бы один файл','warn'); return; }
     go.disabled = true;
     go.innerHTML = MQ.icon('refresh',{size:17,cls:'mq-spin'}) + 'Загрузка...';
+    let pdf; try{ pdf=await submissionPdf(dz.files); }catch(e){ MQ.toast(e.message,'err',5000);go.disabled=false;go.textContent='Отправить';return; }
+    dz.files.splice(0,dz.files.length,pdf);
     const attachments = await dz.upload(MQ.CFG.BUCKETS.hw, MQ.user.id + '/hw' + hw.id);
     const { error } = await MQ.sb.from('homework_submissions').insert({
       homework_id:hw.id, student_id:MQ.user.id,
@@ -1442,6 +1461,8 @@ const GEN = {
   speed: l => { const v = ri(3,8+l)*10, t = ri(2,5);
     return { q:'Скорость ' + v + ' км/ч, время ' + t + ' ч. Путь?', a:v*t }; }
 };
+GEN.trig = () => { const a = pick([0,30,45,60,90]); const vals={0:0,30:0.5,45:0.71,60:0.87,90:1}; return {q:'\\(\\sin '+a+'^\\circ\\)',a:vals[a]}; };
+GEN.probability = l => { const all=ri(6,12+l), good=ri(1,all-1); return {q:'Из '+all+' равновозможных исходов подходят '+good+'. Вероятность (десятичной дробью)?',a:Number((good/all).toFixed(2))}; };
 GEN.vpr = l => pick([GEN.percent, GEN.rect, GEN.speed, GEN.seq, GEN.add])(l);
 
 const SECTIONS = [
@@ -1450,20 +1471,19 @@ const SECTIONS = [
            ['pow','Степени'],['percent','Проценты']] },
   { key:'algebra', title:'Алгебра', icon:'chart',
     kinds:[['linear','Линейные уравнения'],['linear2','Уравнения со сдвигом'],
-           ['quad','Квадратные уравнения'],['seq','Последовательности']] },
+           ['quad','Квадратные уравнения'],['seq','Последовательности'],['trig','Тригонометрия']] },
   { key:'geometry', title:'Геометрия', icon:'ruler',
     kinds:[['square','Площадь квадрата'],['rect','Площадь прямоугольника'],['perim','Периметр'],
            ['triangle','Площадь треугольника'],['angles','Углы']] },
   { key:'logic', title:'Логика и задачи', icon:'lightbulb',
-    kinds:[['logic','Текстовые задачи'],['speed','Движение']] },
+    kinds:[['logic','Текстовые задачи'],['speed','Движение'],['probability','Теория вероятностей']] },
   { key:'vpr', title:'Подготовка к ВПР', icon:'target', kinds:[['vpr','Смешанный вариант']] }
 ];
-const LEVELS = [[1,'Легко'],[2,'Средне'],[3,'Сложно']];
 const CATALOG = (function(){
   const out = [];
-  SECTIONS.forEach(s => s.kinds.forEach(p => LEVELS.forEach(l => out.push({
-    slug:s.key + '-' + p[0] + '-' + l[0], section:s.key, sectionTitle:s.title, icon:s.icon,
-    kind:p[0], lvl:l[0], title:p[1], sub:l[1], reward:3 + l[0]*2 }))));
+  SECTIONS.forEach(s => s.kinds.forEach(p => out.push({
+    slug:s.key + '-' + p[0], section:s.key, sectionTitle:s.title, icon:s.icon,
+    kind:p[0], lvl:2, title:p[1], sub:'единый режим · задания усложняются постепенно', reward:7 })));
   return out;
 })();
 
@@ -1557,7 +1577,7 @@ MQ.views.games = async function(){
   const wrap = MQ.el('div','mq-stack',
     '<div class="mq-row mq-row--wrap"><div><h2 style="margin:0">Тренажёры</h2>' +
     '<p class="mq-muted" style="margin:2px 0 0;font-size:14px">' + CATALOG.length +
-    ' режимов · все бесплатно</p></div><div class="mq-spacer"></div>' +
+    ' тем · единая сложность · бесплатно</p></div><div class="mq-spacer"></div>' +
     '<input class="mq-input" id="gQ" placeholder="Поиск..." style="max-width:220px"></div>');
   const listBox = MQ.el('div','mq-stack');
   wrap.appendChild(listBox);
@@ -1603,6 +1623,18 @@ MQ.views.games = async function(){
   MQ.$('#gQ', wrap).oninput = MQ.debounce(e => paint(e.target.value), 220);
   return wrap;
 };
+})();
+</script>
+
+<script>
+/* =====================================================================
+   B5.1 — ИГРОВАЯ
+   ===================================================================== */
+(function(){
+'use strict';const MQ=window.MQ;
+const games=[['Тетрис','Собирайте линии из фигур'],['Пятнашки','Расставьте числа по порядку'],['Морской бой','Найдите корабли соперника'],['Шашки','Продумывайте комбинации'],['Шахматы','Тренируйте стратегию'],['Судоку','Заполните поле цифрами'],['Мемори','Найдите одинаковые пары'],['Змейка','Собирайте очки'],['2048','Объединяйте одинаковые числа'],['Математическое бинго','Решайте примеры на скорость']];
+function play(g){let score=0,time=20;const box=MQ.el('div','mq-center','<p>'+MQ.esc(g[1])+'</p><div style="font-size:54px;margin:18px">🎯</div><p><b data-score>0</b> очков · <b data-time>20</b> сек.</p><button class="mq-btn mq-btn--primary mq-btn--lg" data-hit>Играть</button>');const close=MQ.modalNode(g[0],box,'Закрыть',(_,done)=>done());const timer=setInterval(()=>{time--;box.querySelector('[data-time]').textContent=time;if(time<=0){clearInterval(timer);box.querySelector('[data-hit]').disabled=true;MQ.toast('Игра окончена: '+score+' очков','ok')}},1000);box.querySelector('[data-hit]').onclick=()=>{score++;box.querySelector('[data-score]').textContent=score};}
+MQ.views.arcade=function(){const wrap=MQ.el('div','mq-stack mq-anim-in','<div><h2 style="margin:0">Игры</h2><p class="mq-muted">10 игр для логики, внимания и отдыха между занятиями</p></div>'),grid=MQ.el('div','mq-grid mq-grid--3');games.forEach((g,i)=>{const c=MQ.el('button','mq-card mq-card--hover','<div style="font-size:34px">'+['🧱','🔢','🚢','⛀','♟','9️⃣','🃏','🐍','✨','🎯'][i]+'</div><h3 style="margin-top:8px">'+g[0]+'</h3><p class="mq-muted">'+g[1]+'</p>');c.style.textAlign='left';c.style.cursor='pointer';c.onclick=()=>play(g);grid.appendChild(c)});wrap.appendChild(grid);return wrap};
 })();
 </script>
 
@@ -2074,9 +2106,11 @@ const MQ = window.MQ;
 MQ.views.learn = function(){
   const isT = MQ.isTeacher();
   const tiles = [
-    { k:'games', i:'game',   t:'Тренажёры',       d:'45 режимов, все бесплатные' },
-    { k:'bank',  i:'book',   t:'Банк задач',      d:'5–11 класс, по темам' },
-    { k:'exams', i:'target', t:'ВПР · ОГЭ · ЕГЭ', d:'Пробники и варианты' }
+    { k:'games', i:'game', t:'Тренажёры', d:'Единые режимы по темам' },
+    { k:'arcade', i:'trophy', t:'Игры', d:'10 игр для логики и отдыха' },
+    { k:'bank',  i:'book',   t:'Банк ФИПИ',       d:'ОГЭ, ЕГЭ профиль и ЕГЭ база' },
+    { k:'topics', i:'lightbulb', t:'Темы и задачи', d:'Теория и практика для 5–11 классов' },
+    { k:'exams', i:'target', t:'ВПР · ОГЭ · ЕГЭ', d:'Только полные пробники' }
   ];
   tiles.push(isT ? { k:'orders', i:'trophy', t:'Заказы', d:'Кто что обменял на баллы' }
                  : { k:'stats',  i:'chart',  t:'Прогресс', d:'Цель дня, точность, достижения' });
@@ -2312,9 +2346,14 @@ function editor(initial){
       '<button type="button" class="mq-ed-btn" data-c="underline" style="text-decoration:underline">Ч</button>' +
       '<button type="button" class="mq-ed-btn" data-c="superscript">x²</button>' +
       '<button type="button" class="mq-ed-btn" data-c="subscript">x₂</button>' +
+      '<button type="button" class="mq-ed-btn" data-symbol="√(x)">√</button>' +
+      '<button type="button" class="mq-ed-btn" data-symbol="a⁄b">a⁄b</button>' +
+      '<button type="button" class="mq-ed-btn" data-symbol="sin(x)">sin</button>' +
+      '<button type="button" class="mq-ed-btn" data-symbol="cos(x)">cos</button>' +
       '<button type="button" class="mq-ed-btn" data-c="insertUnorderedList">• список</button>' +
       '<button type="button" class="mq-ed-btn" data-tex>Формула</button>' +
       '<button type="button" class="mq-ed-btn" data-img>' + MQ.icon('image',{size:14}) + ' Фото</button>' +
+      '<button type="button" class="mq-ed-btn" data-geometry>△ Геометрия</button>' +
       '<button type="button" class="mq-ed-btn" data-c="removeFormat">Сброс</button>' +
       '<input type="file" accept="image/*" hidden data-file></div>' +
     '<div class="mq-ed-body" contenteditable="true" data-body></div>' +
@@ -2326,6 +2365,15 @@ function editor(initial){
     b.onmousedown = e => e.preventDefault();
     b.onclick = () => { body.focus(); document.execCommand(b.dataset.c, false, null); };
   });
+  root.querySelectorAll('[data-symbol]').forEach(b => b.onclick = () => {
+    body.focus(); document.execCommand('insertText', false, b.dataset.symbol);
+  });
+  root.querySelector('[data-geometry]').onclick = () => {
+    const box=MQ.el('div','mq-stack','<p class="mq-muted">Выберите фигуру — чертёж будет вставлен в материал.</p><div class="mq-row mq-row--wrap" data-shapes></div>');
+    const shapes=[['Треугольник','△'],['Квадрат','□'],['Окружность','○'],['Трапеция','⏢'],['Угол','∠'],['Координаты','⌗']];
+    shapes.forEach(x=>{const b=MQ.el('button','mq-btn mq-btn--ghost',x[1]+' '+x[0]);b.onclick=()=>{body.focus();document.execCommand('insertText',false,' '+x[1]+' ');document.querySelector('.mq-modal-back .mq-modal__x').click();};box.querySelector('[data-shapes]').appendChild(b);});
+    MQ.modalNode('Конструктор геометрических фигур',box,'Готово',(_,close)=>close());
+  };
   root.querySelectorAll('[data-cmd]').forEach(s => s.onchange = () => {
     if (!s.value) return;
     body.focus();
@@ -2356,6 +2404,8 @@ function editor(initial){
     get text(){ return body.textContent.trim(); } };
 }
 
+MQ.richEditor = editor;
+
 // Обновлённый диалог создания/редактирования задачи
 async function taskDialog(task){
   const t = task || {};
@@ -2374,9 +2424,9 @@ async function taskDialog(task){
         s[1] + '</option>').join('') + '</select></label>' +
       '<label class="mq-field" style="flex:1;min-width:110px"><span class="mq-label">Экзамен</span>' +
       '<select class="mq-select" id="tkE"><option value="">—</option>' +
-      '<option value="vpr"' + (t.exam === 'vpr' ? ' selected' : '') + '>ВПР</option>' +
       '<option value="oge"' + (t.exam === 'oge' ? ' selected' : '') + '>ОГЭ</option>' +
-      '<option value="ege"' + (t.exam === 'ege' ? ' selected' : '') + '>ЕГЭ</option></select></label>' +
+      '<option value="ege-profile"' + (t.exam === 'ege-profile' ? ' selected' : '') + '>ЕГЭ профиль</option>' +
+      '<option value="ege-base"' + (t.exam === 'ege-base' ? ' selected' : '') + '>ЕГЭ база</option></select></label>' +
       '<label class="mq-field" style="max-width:120px"><span class="mq-label">Сложность</span>' +
       '<input class="mq-input" id="tkD" type="number" min="1" max="5" value="' +
       (t.difficulty || 1) + '"></label></div>' +
@@ -2498,9 +2548,9 @@ async function solveTaskDialog(task) {
 // Обновлённый вид банка задач
 MQ.views.bank = async function(){
   const isT = MQ.isTeacher();
-  const f = MQ.params.filter || { grade:'', section:'', exam:'' };
+  const f = MQ.params.filter || { grade:'', section:'', exam:'oge' };
   const wrap = MQ.el('div','mq-stack mq-anim-in');
-  const head = MQ.el('div','mq-row mq-row--wrap','<h2 style="margin:0">Банк задач</h2><div class="mq-spacer"></div>');
+  const head = MQ.el('div','mq-row mq-row--wrap','<h2 style="margin:0">Банк ФИПИ</h2><div class="mq-spacer"></div>');
   if (isT){
     const add = MQ.el('button','mq-btn mq-btn--primary', MQ.icon('plus',{size:17}) + 'Новая задача');
     add.onclick = () => taskDialog(null);
@@ -2516,10 +2566,9 @@ MQ.views.bank = async function(){
     '<select class="mq-select" id="fS" style="max-width:170px"><option value="">Все разделы</option>' +
     SECT.map(s => '<option value="' + s[0] + '"' + (f.section === s[0] ? ' selected' : '') + '>' +
       s[1] + '</option>').join('') + '</select>' +
-    '<select class="mq-select" id="fE" style="max-width:160px"><option value="">Все экзамены</option>' +
-    '<option value="vpr"' + (f.exam === 'vpr' ? ' selected' : '') + '>ВПР</option>' +
-    '<option value="oge"' + (f.exam === 'oge' ? ' selected' : '') + '>ОГЭ</option>' +
-    '<option value="ege"' + (f.exam === 'ege' ? ' selected' : '') + '>ЕГЭ</option></select></div>');
+    '<select class="mq-select" id="fE" style="max-width:180px"><option value="oge">ОГЭ</option>' +
+    '<option value="ege-profile"' + (f.exam === 'ege-profile' ? ' selected' : '') + '>ЕГЭ профиль</option>' +
+    '<option value="ege-base"' + (f.exam === 'ege-base' ? ' selected' : '') + '>ЕГЭ база</option></select></div>');
   wrap.appendChild(bar);
   ['fG','fS','fE'].forEach(id => MQ.$('#' + id, bar).onchange = () =>
     MQ.go('bank',{ filter:{ grade:MQ.$('#fG', bar).value,
@@ -2550,7 +2599,8 @@ MQ.views.bank = async function(){
       '<div style="flex:1;min-width:0"><h3 class="mq-card__title">' +
       MQ.esc(t.title || 'Задача №' + t.id) + '</h3><p class="mq-card__sub">' + secName(t.section) +
       (t.grade ? ' · ' + t.grade + ' класс' : '') +
-      (t.exam ? ' · ' + t.exam.toUpperCase() : '') +
+      (t.exam ? ' · ' + ({oge:'ОГЭ','ege-profile':'ЕГЭ профиль','ege-base':'ЕГЭ база'}[t.exam] || t.exam.toUpperCase()) : '') +
+      ' · источник: ФИПИ' +
       ' · сложность ' + t.difficulty +
       (t.reward_points > 0 ? ' · <b class="mq-chip mq-chip--ok" style="font-size:12px">+' + t.reward_points + ' баллов</b>' : '') +
       '</p></div>' +
@@ -2610,12 +2660,50 @@ MQ.views.bank = async function(){
 
 <script>
 /* =====================================================================
+   B9.1 — ТЕМЫ: ТЕОРИЯ И ЗАДАЧИ (добавляет только администратор)
+   ===================================================================== */
+(function(){
+'use strict';
+const MQ=window.MQ, KEY='imath_topics_v1';
+const grades=[5,6,7,8,9,10,11];
+const subjects=g => g<=6 ? ['Математика'] : ['Алгебра','Геометрия','Теория вероятностей и статистика'];
+const load=()=>{try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){return []}};
+const save=x=>localStorage.setItem(KEY,JSON.stringify(x));
+function topicDialog(old){
+  const t=old||{}, theory=MQ.richEditor(t.theory||''), task=MQ.richEditor(t.task||'');
+  const form=MQ.el('div','mq-stack','<div class="mq-row mq-row--wrap"><label class="mq-field" style="flex:1"><span class="mq-label">Класс</span><select class="mq-select" id="tpG">'+grades.map(g=>'<option '+(t.grade==g?'selected ':'')+'value="'+g+'">'+g+' класс</option>').join('')+'</select></label><label class="mq-field" style="flex:1"><span class="mq-label">Раздел</span><select class="mq-select" id="tpS"></select></label></div><label class="mq-field"><span class="mq-label">Название темы</span><input class="mq-input" id="tpT" value="'+MQ.esc(t.title||'')+'" placeholder="Квадратные уравнения"></label><b>Теоретический материал</b>');
+  form.appendChild(theory.node); form.appendChild(MQ.el('b','','Задача к теме')); form.appendChild(task.node);
+  form.appendChild(MQ.el('div','mq-stack','<label class="mq-field"><span class="mq-label">Рисунок к задаче</span><input class="mq-input" id="tpImg" type="file" accept="image/*"></label><div class="mq-row mq-row--wrap"><label class="mq-field" style="flex:1"><span class="mq-label">Ответ</span><input class="mq-input" id="tpA" value="'+MQ.esc(t.answer||'')+'"></label><label class="mq-field" style="flex:1"><span class="mq-label">Баллы</span><input class="mq-input" id="tpP" type="number" min="0" value="'+(t.points||0)+'"></label></div><label class="mq-field"><span class="mq-label">Решение</span><textarea class="mq-textarea" id="tpSol">'+MQ.esc(t.solution||'')+'</textarea></label>'));
+  const g=form.querySelector('#tpG'), sub=form.querySelector('#tpS');
+  function paintSubjects(){sub.innerHTML=subjects(+g.value).map(x=>'<option '+(t.subject===x?'selected ':'')+'>'+x+'</option>').join('')} g.onchange=paintSubjects;paintSubjects();
+  MQ.modalNode(t.id?'Изменить тему':'Новая тема',form,'Сохранить',(_,close)=>{
+    const title=form.querySelector('#tpT').value.trim(); if(!title||!theory.html){MQ.toast('Добавьте название и теорию','warn');return}
+    const all=load(), row={id:t.id||Date.now(),grade:+g.value,subject:sub.value,title,theory:theory.html,task:task.html,answer:form.querySelector('#tpA').value,solution:form.querySelector('#tpSol').value,points:+form.querySelector('#tpP').value||0};
+    const file=form.querySelector('#tpImg').files[0]; const done=()=>{const i=all.findIndex(x=>x.id===row.id);if(i<0)all.unshift(row);else all[i]=row;save(all);close();MQ.toast('Тема сохранена','ok');MQ.render()};
+    if(file){const rd=new FileReader();rd.onload=()=>{row.image=rd.result;done()};rd.readAsDataURL(file)}else{row.image=t.image||'';done()}
+  });
+}
+MQ.views.topics=function(){
+  const isT=MQ.isTeacher(), f=MQ.params.topicFilter||{grade:5,subject:'Математика'}, wrap=MQ.el('div','mq-stack mq-anim-in');
+  const head=MQ.el('div','mq-row mq-row--wrap','<div><h2 style="margin:0">Темы и задачи</h2><p class="mq-muted" style="margin:2px 0">5–11 класс · теория, затем практика</p></div><div class="mq-spacer"></div>');
+  if(isT){const add=MQ.el('button','mq-btn mq-btn--primary',MQ.icon('plus',{size:17})+'Добавить тему');add.onclick=()=>topicDialog();head.appendChild(add)} wrap.appendChild(head);
+  const bar=MQ.el('div','mq-card mq-row mq-row--wrap','<select class="mq-select" id="tg" style="max-width:160px">'+grades.map(g=>'<option '+(f.grade==g?'selected ':'')+'value="'+g+'">'+g+' класс</option>').join('')+'</select><select class="mq-select" id="ts" style="max-width:300px"></select>');wrap.appendChild(bar);
+  const gs=bar.querySelector('#tg'),ss=bar.querySelector('#ts'); function subjectsPaint(){ss.innerHTML=subjects(+gs.value).map(x=>'<option '+(f.subject===x?'selected ':'')+'>'+x+'</option>').join('')} subjectsPaint();
+  const go=()=>MQ.go('topics',{topicFilter:{grade:+gs.value,subject:ss.value}});gs.onchange=()=>{subjectsPaint();go()};ss.onchange=go;
+  const rows=load().filter(x=>x.grade==f.grade&&x.subject==f.subject); if(!rows.length){wrap.appendChild(MQ.empty(isT?'Добавьте первую тему в этот раздел':'Материалы скоро появятся','book'));return wrap}
+  rows.forEach(t=>{const c=MQ.el('article','mq-card','<h3>'+MQ.esc(t.title)+'</h3><div class="mq-chip mq-chip--brand">'+t.grade+' класс · '+MQ.esc(t.subject)+'</div><h4 style="margin-top:18px">Теория</h4><div class="mq-task-body">'+t.theory+'</div>');if(t.task){const task=MQ.el('div','mq-card','<h4>Задача</h4><div class="mq-task-body">'+t.task+'</div>'+(t.image?'<img class="mq-task-img" src="'+t.image+'">':'')+'<div class="mq-row mq-row--wrap" style="margin-top:10px"><span class="mq-chip mq-chip--ok">'+t.points+' баллов</span><button class="mq-btn mq-btn--ghost mq-btn--sm" data-answer>Ответ</button><button class="mq-btn mq-btn--ghost mq-btn--sm" data-solution>Решение</button></div>');task.querySelector('[data-answer]').onclick=()=>MQ.alertBox(t.answer||'Ответ пока не добавлен','Ответ');task.querySelector('[data-solution]').onclick=()=>MQ.alertBox(t.solution||'Решение пока не добавлено','Решение');c.appendChild(task)}if(isT){const b=MQ.el('button','mq-btn mq-btn--ghost mq-btn--sm','Изменить');b.style.marginTop='12px';b.onclick=()=>topicDialog(t);c.appendChild(b)}wrap.appendChild(c)});MQ.math(wrap);return wrap;
+};
+})();
+</script>
+
+<script>
+/* =====================================================================
    B10 — ПРОБНИКИ ВПР / ОГЭ / ЕГЭ
    ===================================================================== */
 (function(){
 'use strict';
 const MQ = window.MQ;
-const EXAMS = [['vpr','ВПР','target'],['oge','ОГЭ','trophy'],['ege','ЕГЭ','chart']];
+const EXAMS = [['vpr','ВПР','target'],['oge','ОГЭ','trophy'],['ege-profile','ЕГЭ профиль','chart'],['ege-base','ЕГЭ база','sigma']];
 const GRADES = [4,5,6,7,8,9,10,11];
 const examName = k => (EXAMS.filter(e => e[0] === k)[0] || ['','—',''])[1];
 const examIcon = k => (EXAMS.filter(e => e[0] === k)[0] || ['','','target'])[2];
@@ -2656,7 +2744,7 @@ async function paperDialog(){
 
 MQ.views.exams = async function(){
   const isT = MQ.isTeacher();
-  const cur = MQ.params.exam || '';
+  const cur = MQ.params.exam || 'vpr';
   const wrap = MQ.el('div','mq-stack mq-anim-in');
   const head = MQ.el('div','mq-row mq-row--wrap',
     '<h2 style="margin:0">ВПР · ОГЭ · ЕГЭ</h2><div class="mq-spacer"></div>');
@@ -2668,7 +2756,7 @@ MQ.views.exams = async function(){
   wrap.appendChild(head);
 
   const tabs = MQ.el('div','mq-row mq-row--wrap');
-  [['','Все']].concat(EXAMS.map(e => [e[0], e[1]])).forEach(t => {
+  EXAMS.map(e => [e[0], e[1]]).forEach(t => {
     const b = MQ.el('button','mq-btn mq-btn--sm ' +
       (cur === t[0] ? 'mq-btn--primary' : 'mq-btn--ghost'), t[1]);
     b.onclick = () => MQ.go('exams',{ exam:t[0] });
@@ -2744,24 +2832,24 @@ MQ.views.exams = async function(){
 const MQ = window.MQ;
 
 const DIRECTIONS = [
-  { i:'sigma',     t:'Математика 5–9 класс', d:'Закрываем пробелы, разбираем программу на шаг вперёд школы.' },
+  { i:'sigma',     t:'Математика 5–11 класс', d:'Закрываем пробелы, разбираем программу на шаг вперёд школы.' },
   { i:'target',    t:'Подготовка к ВПР',     d:'Разбор структуры работы и тренировка типовых заданий.' },
   { i:'trophy',    t:'ОГЭ',                  d:'Первая и вторая часть, оформление решений, тайминг.' },
   { i:'chart',     t:'ЕГЭ (база и профиль)', d:'Стратегия по номерам и регулярные пробники.' },
   { i:'ruler',     t:'Геометрия',            d:'От чертежа к доказательству: учим видеть решение.' },
-  { i:'lightbulb', t:'Олимпиадные задачи',   d:'Нестандартное мышление для тех, кому мало учебника.' }
 ];
 const HOW = [
   { i:'chat',  t:'Знакомство',   d:'Бесплатная встреча: цели, уровень, удобное расписание.' },
   { i:'note',  t:'План занятий', d:'Составляю программу под конкретную цель и сроки.' },
   { i:'game',  t:'Занятия и тренажёры', d:'Урок, домашка в приложении, тренажёры без ограничений.' },
-  { i:'star',  t:'Оценки и отчёты', d:'Родитель видит журнал, средний балл и прогресс.' }
+  { i:'star',  t:'Оценки и отчёты', d:'Понятная обратная связь после каждого этапа обучения.' },
+  { i:'trophy', t:'Результат', d:'Закрепляем знания, отслеживаем рост и уверенно идём к цели.' }
 ];
 const REVIEWS = [
   { n:'Ольга', r:'мама ученика 6 класса', s:5,
     t:'Пришли с постоянными двойками за контрольные. Регина начала не с программы, а с пробелов за прошлый год — и через два месяца сын впервые сам сел за домашку.' },
-  { n:'Мария', r:'мама выпускницы, ОГЭ', s:5,
-    t:'Геометрия была полностью провалена. Занимались год, разбирали каждую задачу до чертежа. На ОГЭ вторая часть решена, итог — пятёрка.' },
+  { n:'Регина и Максим', r:'преподаватели iMath', s:5,
+    t:'Спокойно объясняем сложное, выстраиваем понятный план и помогаем ученику увидеть собственный прогресс.' },
   { n:'Артём', r:'ученик 9 класса', s:5,
     t:'Объясняет так, что потом сам можешь рассказать решение, а не просто списать. Удобно, что домашка в приложении и сразу видно, проверено или нет.' },
   { n:'Светлана', r:'мама ученика 8 класса', s:5,
@@ -2791,8 +2879,8 @@ MQ.views.home = function(){
     '<p class="mq-hero__lead">iMath — занятия с преподавателем, домашние задания и журнал оценок ' +
     'в приложении, бесплатные тренажёры для ежедневной практики.</p>' +
     '<div class="mq-hero__cta">' +
-      '<a class="mq-btn mq-btn--primary mq-btn--lg" href="' + C.whatsapp + '" target="_blank" rel="noopener">' +
-      MQ.icon('whatsapp',{size:19}) + 'Записаться на занятие</a>' +
+      '<a class="mq-btn mq-btn--primary mq-btn--lg" href="' + C.telegram + '" target="_blank" rel="noopener">' +
+      MQ.icon('telegram',{size:19}) + 'Записаться на занятие</a>' +
       '<button class="mq-btn mq-btn--ghost mq-btn--lg" data-go="games">' +
       MQ.icon('play',{size:18}) + 'Открыть тренажёры</button></div>' +
     '<div class="mq-hero__stats">' +
@@ -2818,14 +2906,15 @@ MQ.views.home = function(){
     '<p class="mq-card__sub">' + MQ.esc(C.role) + '</p></div></div>' +
     '<p>Работаю с учениками 5–11 классов: от «ничего не понимаю» до подготовки к экзаменам. ' +
     'Объясняю без заученных формулировок, добиваюсь, чтобы ученик сам мог рассказать решение.</p>' +
-    '<div class="mq-row mq-row--wrap" style="margin-top:14px">' +
-      '<span class="mq-chip mq-chip--ok">' + MQ.icon('check',{size:14}) + 'Индивидуально</span>' +
-      '<span class="mq-chip mq-chip--ok">' + MQ.icon('check',{size:14}) + 'Журнал для родителей</span>' +
-      '<span class="mq-chip mq-chip--ok">' + MQ.icon('check',{size:14}) + 'Домашка с проверкой</span>' +
-    '</div></div>'));
+    '</div>' +
+    '<div class="mq-card mq-card--pad-lg" style="margin-top:16px">' +
+      '<div class="mq-card__head"><span class="mq-avatar" style="width:64px;height:64px;font-size:24px">М</span>' +
+      '<div><h2 style="margin:0 0 2px">Максим</h2><p class="mq-card__sub">репетитор по математике</p></div></div>' +
+      '<p><b>Не заучивать, а понимать.</b> Максим помогает увидеть логику задачи, поверить в свои силы и превратить сложную математику в последовательные понятные шаги.</p>' +
+    '</div>'));
 
   const how = MQ.el('section','mq-section','<div class="mq-section__head"><h2>Как это работает</h2></div>');
-  const hg = MQ.el('div','mq-grid mq-grid--4');
+  const hg = MQ.el('div','mq-how-grid');
   HOW.forEach((s,i) => hg.appendChild(MQ.el('div','mq-card mq-card--hover',
     '<div class="mq-row">' + MQ.iconBadge(s.i) + '<span class="mq-chip">' + (i+1) + '</span></div>' +
     '<h3 style="margin:12px 0 6px;font-size:16px">' + s.t + '</h3>' +
@@ -2857,13 +2946,13 @@ MQ.views.home = function(){
   wrap.appendChild(MQ.el('section','mq-section',
     '<div class="mq-cta-band"><h2>Начнём с бесплатного занятия</h2>' +
     '<p>Познакомимся, определим уровень и составим план. Без обязательств.</p>' +
-    '<a class="mq-btn mq-btn--lg" href="' + C.whatsapp + '" target="_blank" rel="noopener">' +
-    MQ.icon('whatsapp',{size:19}) + 'Написать в WhatsApp</a></div>' +
+    '<a class="mq-btn mq-btn--lg" href="' + C.telegram + '" target="_blank" rel="noopener">' +
+    MQ.icon('telegram',{size:19}) + 'Написать в Telegram</a></div>' +
     '<div class="mq-contacts" style="margin-top:26px">' +
       '<a class="mq-contact mq-contact--wa" href="' + C.whatsapp + '" target="_blank" rel="noopener">' +
       MQ.icon('whatsapp',{size:18}) + 'WhatsApp</a>' +
       '<a class="mq-contact mq-contact--tg" href="' + C.telegram + '" target="_blank" rel="noopener">' +
-      MQ.icon('telegram',{size:18}) + 'Telegram</a>' +
+      MQ.icon('telegram',{size:18}) + '@regina_zabirova</a>' +
       '<a class="mq-contact mq-contact--max" href="' + (C.max || ('tel:' + C.phoneRaw)) +
       '" target="_blank" rel="noopener">' + MQ.icon('chat',{size:18}) + 'MAX</a>' +
       '<a class="mq-contact mq-contact--tel" href="tel:' + C.phoneRaw + '">' +
@@ -2872,8 +2961,7 @@ MQ.views.home = function(){
       MQ.icon('mail',{size:18}) + MQ.esc(C.email) + '</a></div>'));
 
   wrap.appendChild(MQ.el('footer','mq-footer',
-    'iMath · ' + new Date().getFullYear() + ' · ' + MQ.esc(C.name) +
-    '<br>Онлайн-занятия по математике, тренажёры и журнал оценок'));
+    'iMath · ' + new Date().getFullYear() + ' · Регина'));
   return wrap;
 };
 })();
