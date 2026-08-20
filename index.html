@@ -2544,61 +2544,103 @@ function showTaskResult(task, title){
 }
 
 // Ответ и решение становятся доступны ученику только после отправки своего ответа
-async function solveTaskDialog(task) {
+async function solveTaskDialog(task, sectionTitle){
   const form = MQ.el('div','mq-stack');
   const body = MQ.el('div','mq-task-body');
-  body.innerHTML = task.statement_html || MQ.esc(task.statement || '');
+  body.innerHTML = task.task_html || '';
   form.appendChild(body);
-  if (task.image_path) {
+  if (task.image) {
     const img = MQ.el('img','mq-task-img');
-    img.src = MQ.pubUrl('tasks', task.image_path);
+    img.src = task.image;
     form.appendChild(img);
   }
   form.appendChild(MQ.el('label','mq-field',
     '<span class="mq-label">Ваш ответ</span>' +
-    '<input class="mq-input" id="solveAns" placeholder="Введите ответ">'
+    '<input class="mq-input" id="solveAns" placeholder="Введите ответ (можно с формулами)">'
   ));
-  if (task.reward_points > 0) {
-    form.appendChild(MQ.el('div','mq-hint', 'За правильный ответ вы получите ' + task.reward_points + ' баллов.'));
+  if (task.points > 0) {
+    form.appendChild(MQ.el('div','mq-hint', 'За правильный ответ вы получите ' + task.points + ' баллов.'));
   }
 
-  MQ.modalNode('Решить задачу', form, 'Проверить', async (go, close) => {
+  // Проверяем, решал ли пользователь уже эту задачу правильно
+  let alreadySolved = false;
+  try {
+    const { data } = await MQ.sb
+      .from('topic_task_solutions')
+      .select('id')
+      .eq('task_id', task.id)
+      .eq('user_id', MQ.user.id)
+      .eq('correct', true)
+      .limit(1);
+    if (data && data.length > 0) alreadySolved = true;
+  } catch(e) { /* игнорируем ошибки */ }
+
+  MQ.modalNode('Решить задачу: ' + (task.title || sectionTitle || ''), form, 'Проверить', async (go, close) => {
     const answer = MQ.$('#solveAns', form).value.trim();
     if (!answer) { MQ.toast('Введите ответ','warn'); return; }
+
+    // Если уже решено правильно – просто показываем ответ и решение без начисления баллов
+    if (alreadySolved) {
+      MQ.toast('Вы уже решили эту задачу правильно', 'info');
+      close();
+      showAnswerAndSolution(task);
+      return;
+    }
+
     go.disabled = true;
     go.innerHTML = MQ.icon('refresh',{size:17,cls:'mq-spin'}) + 'Проверка...';
 
     const correct = answer.toLowerCase() === (task.answer || '').toLowerCase();
-    const { error } = await MQ.sb.from('task_solutions').insert({
-      task_id: task.id,
-      user_id: MQ.user.id,
-      answer: answer,
-      correct: correct
-    });
-    if (error) {
-      MQ.toast(error.message, 'err');
-      go.disabled = false;
-      return;
-    }
 
-    if (correct && task.reward_points > 0) {
-      const { data } = await MQ.rpc('add_points',{ p_amount: task.reward_points });
+    // Сохраняем попытку
+    try {
+      await MQ.sb.from('topic_task_solutions').insert({
+        task_id: task.id,
+        user_id: MQ.user.id,
+        answer: answer,
+        correct: correct
+      });
+    } catch(e) { /* игнорируем */ }
+
+    // Начисляем баллы только если ответ правильный и ещё не было правильного ответа
+    if (correct && !alreadySolved && task.points > 0) {
+      const { data } = await MQ.rpc('add_points',{ p_amount: task.points });
       if (data && data[0]) {
         MQ.profile.points = data[0].points;
         MQ.profile.streak = data[0].streak;
         MQ.dressHeader();
       }
-      MQ.pointsPop(task.reward_points, MQ.$('#mqPts'));
+      MQ.pointsPop(task.points, MQ.$('#mqPts'));
       MQ.confetti(30);
-      MQ.toast('Правильно! Вы получили ' + task.reward_points + ' баллов 🎉', 'ok', 4000);
+      MQ.toast('Правильно! Вы получили ' + task.points + ' баллов 🎉', 'ok', 4000);
     } else if (correct) {
       MQ.toast('Правильно!', 'ok');
     } else {
-      MQ.toast('Ответ принят — сравните с решением', 'info');
+      MQ.toast('Ответ принят – сравните с решением', 'info');
     }
+
     close();
-    showTaskResult(task, correct ? 'Верно!' : 'Проверьте решение');
+    // Показываем ответ и решение
+    showAnswerAndSolution(task);
   });
+}
+
+// Вспомогательная функция для показа ответа и решения
+function showAnswerAndSolution(task){
+  const result = MQ.el('div','mq-stack');
+  if (task.answer) {
+    const ansDiv = MQ.el('div','mq-card');
+    ansDiv.innerHTML = '<b>Правильный ответ</b><div class="mq-task-body">' + MQ.esc(task.answer) + '</div>';
+    result.appendChild(ansDiv);
+  }
+  if (task.solution_html) {
+    const solDiv = MQ.el('div','mq-card');
+    solDiv.innerHTML = '<b>Решение</b><div class="mq-task-body">' + task.solution_html + '</div>';
+    result.appendChild(solDiv);
+    MQ.math(solDiv);
+  }
+  MQ.modalNode('Ответ и решение', result, 'Закрыть', (_, done) => done());
+  MQ.math(result);
 }
 
 // Обновлённый вид банка задач
