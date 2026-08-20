@@ -2705,7 +2705,7 @@ MQ.views.bank = async function(){
 
 
 /* =====================================================================
-   B9.1 — ТЕМЫ И ЗАДАЧИ (АККОРДЕОН)
+   B9.1 — ТЕМЫ И ЗАДАЧИ (АККОРДЕОН + все функции)
    ===================================================================== */
 (function(){
 'use strict';
@@ -2714,7 +2714,7 @@ const MQ = window.MQ;
 const grades = [5,6,7,8,9,10,11];
 const subjects = g => g <= 6 ? ['Математика'] : ['Алгебра','Геометрия','Теория вероятностей и статистика'];
 
-// ---------------------- ЗАГРУЗКА ДАННЫХ (без изменений) ----------------------
+// ---------------------- ЗАГРУЗКА ДАННЫХ ----------------------
 async function loadSections(grade, subject){
   if (!MQ.sb) return [];
   const { data, error } = await MQ.sb
@@ -2738,23 +2738,342 @@ async function loadTasks(sectionId){
   return data || [];
 }
 
-async function saveSection(row){ /* ... как было ... */ }
-async function saveTask(row){ /* ... как было ... */ }
-async function deleteSection(id){ /* ... как было ... */ }
-async function deleteTask(id){ /* ... как было ... */ }
+async function saveSection(row){
+  if (!MQ.sb) throw new Error('Supabase не инициализирован');
+  if (row.id) {
+    const { error } = await MQ.sb.from('topic_sections').update({
+      title: row.title,
+      theory: row.theory,
+      grade: row.grade,
+      subject: row.subject,
+      image: row.image || null
+    }).eq('id', row.id);
+    if (error) throw error;
+  } else {
+    const { error } = await MQ.sb.from('topic_sections').insert({
+      title: row.title,
+      theory: row.theory,
+      grade: row.grade,
+      subject: row.subject,
+      image: row.image || null,
+      author_id: MQ.user.id
+    });
+    if (error) throw error;
+  }
+}
 
-// ---------------------- ДИАЛОГИ (без изменений) ----------------------
-function sectionDialog(old){ /* ... как было ... */ }
-function taskDialog(sectionId, old){ /* ... как было ... */ }
-async function solveTaskDialog(task, sectionTitle){ /* ... как было ... */ }
+async function saveTask(row){
+  if (!MQ.sb) throw new Error('Supabase не инициализирован');
+  if (row.id) {
+    const { error } = await MQ.sb.from('topic_tasks').update({
+      section_id: row.section_id,
+      title: row.title,
+      task_html: row.task_html,
+      answer: row.answer,
+      solution_html: row.solution_html,
+      image: row.image || null,
+      points: row.points || 0
+    }).eq('id', row.id);
+    if (error) throw error;
+  } else {
+    const { error } = await MQ.sb.from('topic_tasks').insert({
+      section_id: row.section_id,
+      title: row.title,
+      task_html: row.task_html,
+      answer: row.answer,
+      solution_html: row.solution_html,
+      image: row.image || null,
+      points: row.points || 0,
+      author_id: MQ.user.id
+    });
+    if (error) throw error;
+  }
+}
 
-// ---------------------- ОСНОВНОЙ VIEW (АККОРДЕОН) ----------------------
+async function deleteSection(id){
+  if (!MQ.sb) throw new Error('Supabase не инициализирован');
+  const { error } = await MQ.sb.from('topic_sections').delete().eq('id', id);
+  if (error) throw error;
+}
+
+async function deleteTask(id){
+  if (!MQ.sb) throw new Error('Supabase не инициализирован');
+  const { error } = await MQ.sb.from('topic_tasks').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// ---------------------- ДИАЛОГ СОЗДАНИЯ РАЗДЕЛА ----------------------
+function sectionDialog(old){
+  const s = old || {};
+  const theoryEditor = MQ.richEditor(s.theory || '');
+  const form = MQ.el('div','mq-stack');
+  form.innerHTML = `
+    <div class="mq-row mq-row--wrap">
+      <label class="mq-field" style="flex:1">
+        <span class="mq-label">Класс</span>
+        <select class="mq-select" id="secG">
+          ${grades.map(g => `<option ${s.grade == g ? 'selected' : ''} value="${g}">${g} класс</option>`).join('')}
+        </select>
+      </label>
+      <label class="mq-field" style="flex:1">
+        <span class="mq-label">Раздел</span>
+        <select class="mq-select" id="secS"></select>
+      </label>
+    </div>
+    <label class="mq-field">
+      <span class="mq-label">Название раздела</span>
+      <input class="mq-input" id="secT" value="${MQ.esc(s.title||'')}" placeholder="Линейные уравнения">
+    </label>
+    <b>Теория раздела</b>
+  `;
+  form.appendChild(theoryEditor.node);
+  form.appendChild(MQ.el('div','mq-stack',`
+    <label class="mq-field"><span class="mq-label">Картинка к разделу</span>
+      <input class="mq-input" id="secImg" type="file" accept="image/*">
+    </label>
+  `));
+
+  const g = form.querySelector('#secG');
+  const sub = form.querySelector('#secS');
+  function paintSubjects(){
+    sub.innerHTML = subjects(+g.value).map(x =>
+      `<option ${s.subject === x ? 'selected' : ''}>${x}</option>`
+    ).join('');
+  }
+  g.onchange = paintSubjects;
+  paintSubjects();
+
+  const imgInput = form.querySelector('#secImg');
+  const imgPrev = MQ.el('div');
+  if (s.image) {
+    imgPrev.innerHTML = `<img src="${s.image}" style="max-height:120px;border-radius:8px">`;
+  }
+  form.appendChild(imgPrev);
+  imgInput.onchange = e => {
+    const f = e.target.files[0];
+    if (f) {
+      const reader = new FileReader();
+      reader.onload = ev => {
+        imgPrev.innerHTML = `<img src="${ev.target.result}" style="max-height:120px;border-radius:8px">`;
+      };
+      reader.readAsDataURL(f);
+    }
+  };
+
+  MQ.modalNode(s.id ? 'Изменить раздел' : 'Новый раздел', form, 'Сохранить', async (go, close) => {
+    const title = form.querySelector('#secT').value.trim();
+    if (!title || !theoryEditor.html) {
+      MQ.toast('Заполните название и теорию', 'warn');
+      return;
+    }
+    go.disabled = true;
+    go.innerHTML = MQ.icon('refresh',{size:17,cls:'mq-spin'}) + 'Сохраняем...';
+
+    let image = s.image || null;
+    const file = form.querySelector('#secImg').files[0];
+    if (file) {
+      const path = 'topic_sections/' + Date.now() + '-' + file.name.replace(/[^\w.\-]/g,'_');
+      const { error } = await MQ.sb.storage.from('topic_sections').upload(path, file);
+      if (error) {
+        MQ.toast('Ошибка загрузки картинки: ' + error.message, 'err');
+        go.disabled = false;
+        return;
+      }
+      image = MQ.sb.storage.from('topic_sections').getPublicUrl(path).data.publicUrl;
+    }
+
+    const row = {
+      id: s.id || null,
+      grade: +form.querySelector('#secG').value,
+      subject: form.querySelector('#secS').value,
+      title: title,
+      theory: theoryEditor.html,
+      image: image
+    };
+
+    try {
+      await saveSection(row);
+      close();
+      MQ.toast('Раздел сохранён', 'ok');
+      MQ.render();
+    } catch (e) {
+      MQ.toast(e.message, 'err');
+    } finally {
+      go.disabled = false;
+    }
+  });
+}
+
+// ---------------------- ДИАЛОГ ЗАДАЧИ ----------------------
+function taskDialog(sectionId, old){
+  const t = old || {};
+  const taskEditor = MQ.richEditor(t.task_html || '');
+  const solutionEditor = MQ.richEditor(t.solution_html || '');
+  const form = MQ.el('div','mq-stack');
+  form.innerHTML = `
+    <label class="mq-field">
+      <span class="mq-label">Название задачи (необязательно)</span>
+      <input class="mq-input" id="taskT" value="${MQ.esc(t.title||'')}" placeholder="Задание 1">
+    </label>
+    <label class="mq-field"><span class="mq-label">Условие</span></label>
+  `;
+  form.appendChild(taskEditor.node);
+  form.appendChild(MQ.el('div','mq-stack',`
+    <label class="mq-field"><span class="mq-label">Ответ (можно с формулами)</span>
+      <input class="mq-input" id="taskA" value="${MQ.esc(t.answer||'')}">
+    </label>
+    <label class="mq-field"><span class="mq-label">Решение (с формулами)</span>
+  `));
+  form.appendChild(solutionEditor.node);
+  form.appendChild(MQ.el('div','mq-stack',`
+    <label class="mq-field"><span class="mq-label">Баллы</span>
+      <input class="mq-input" id="taskP" type="number" min="0" value="${t.points||0}">
+    </label>
+    <label class="mq-field"><span class="mq-label">Рисунок к задаче</span>
+      <input class="mq-input" id="taskImg" type="file" accept="image/*">
+    </label>
+  `));
+
+  const imgInput = form.querySelector('#taskImg');
+  const imgPrev = MQ.el('div');
+  if (t.image) {
+    imgPrev.innerHTML = `<img src="${t.image}" style="max-height:120px;border-radius:8px">`;
+  }
+  form.appendChild(imgPrev);
+  imgInput.onchange = e => {
+    const f = e.target.files[0];
+    if (f) {
+      const reader = new FileReader();
+      reader.onload = ev => {
+        imgPrev.innerHTML = `<img src="${ev.target.result}" style="max-height:120px;border-radius:8px">`;
+      };
+      reader.readAsDataURL(f);
+    }
+  };
+
+  MQ.modalNode(t.id ? 'Изменить задачу' : 'Новая задача', form, 'Сохранить', async (go, close) => {
+    if (!taskEditor.html) {
+      MQ.toast('Заполните условие задачи', 'warn');
+      return;
+    }
+    go.disabled = true;
+    go.innerHTML = MQ.icon('refresh',{size:17,cls:'mq-spin'}) + 'Сохраняем...';
+
+    let image = t.image || null;
+    const file = form.querySelector('#taskImg').files[0];
+    if (file) {
+      const path = 'topic_tasks/' + Date.now() + '-' + file.name.replace(/[^\w.\-]/g,'_');
+      const { error } = await MQ.sb.storage.from('topic_tasks').upload(path, file);
+      if (error) {
+        MQ.toast('Ошибка загрузки картинки: ' + error.message, 'err');
+        go.disabled = false;
+        return;
+      }
+      image = MQ.sb.storage.from('topic_tasks').getPublicUrl(path).data.publicUrl;
+    }
+
+    const row = {
+      id: t.id || null,
+      section_id: sectionId,
+      title: form.querySelector('#taskT').value.trim() || null,
+      task_html: taskEditor.html,
+      answer: form.querySelector('#taskA').value.trim() || null,
+      solution_html: solutionEditor.html || null,
+      points: +form.querySelector('#taskP').value || 0,
+      image: image
+    };
+
+    try {
+      await saveTask(row);
+      close();
+      MQ.toast('Задача сохранена', 'ok');
+      MQ.render();
+    } catch (e) {
+      MQ.toast(e.message, 'err');
+    } finally {
+      go.disabled = false;
+    }
+  });
+}
+
+// ---------------------- ДИАЛОГ РЕШЕНИЯ ЗАДАЧИ ----------------------
+async function solveTaskDialog(task, sectionTitle){
+  const form = MQ.el('div','mq-stack');
+  const body = MQ.el('div','mq-task-body');
+  body.innerHTML = task.task_html || '';
+  form.appendChild(body);
+  if (task.image) {
+    const img = MQ.el('img','mq-task-img');
+    img.src = task.image;
+    form.appendChild(img);
+  }
+  form.appendChild(MQ.el('label','mq-field',
+    '<span class="mq-label">Ваш ответ</span>' +
+    '<input class="mq-input" id="solveAns" placeholder="Введите ответ (можно с формулами)">'
+  ));
+  if (task.points > 0) {
+    form.appendChild(MQ.el('div','mq-hint', 'За правильный ответ вы получите ' + task.points + ' баллов.'));
+  }
+
+  MQ.modalNode('Решить задачу: ' + (task.title || sectionTitle || ''), form, 'Проверить', async (go, close) => {
+    const answer = MQ.$('#solveAns', form).value.trim();
+    if (!answer) { MQ.toast('Введите ответ','warn'); return; }
+    go.disabled = true;
+    go.innerHTML = MQ.icon('refresh',{size:17,cls:'mq-spin'}) + 'Проверка...';
+
+    const correct = answer.toLowerCase() === (task.answer || '').toLowerCase();
+    // Сохраняем попытку
+    try {
+      await MQ.sb.from('topic_task_solutions').insert({
+        task_id: task.id,
+        user_id: MQ.user.id,
+        answer: answer,
+        correct: correct
+      });
+    } catch(e) { /* игнорируем, если не сохранилось */ }
+
+    if (correct && task.points > 0) {
+      const { data } = await MQ.rpc('add_points',{ p_amount: task.points });
+      if (data && data[0]) {
+        MQ.profile.points = data[0].points;
+        MQ.profile.streak = data[0].streak;
+        MQ.dressHeader();
+      }
+      MQ.pointsPop(task.points, MQ.$('#mqPts'));
+      MQ.confetti(30);
+      MQ.toast('Правильно! Вы получили ' + task.points + ' баллов 🎉', 'ok', 4000);
+    } else if (correct) {
+      MQ.toast('Правильно!', 'ok');
+    } else {
+      MQ.toast('Ответ принят – сравните с решением', 'info');
+    }
+    close();
+
+    // Показываем ответ и решение
+    const result = MQ.el('div','mq-stack');
+    if (task.answer) {
+      const ansDiv = MQ.el('div','mq-card');
+      ansDiv.innerHTML = '<b>Правильный ответ</b><div class="mq-task-body">' + MQ.esc(task.answer) + '</div>';
+      result.appendChild(ansDiv);
+    }
+    if (task.solution_html) {
+      const solDiv = MQ.el('div','mq-card');
+      solDiv.innerHTML = '<b>Решение</b><div class="mq-task-body">' + task.solution_html + '</div>';
+      result.appendChild(solDiv);
+      MQ.math(solDiv);
+    }
+    MQ.modalNode(correct ? 'Верно!' : 'Проверьте решение', result, 'Закрыть', (_, done) => done());
+    MQ.math(result);
+  });
+}
+
+// ---------------------- ОСНОВНОЙ VIEW (аккордеон) ----------------------
 MQ.views.topics = async function(){
   const isT = MQ.isTeacher();
   const f = MQ.params.topicFilter || { grade: 5, subject: 'Математика' };
   const wrap = MQ.el('div','mq-stack mq-anim-in');
 
-  // Шапка (без изменений)
+  // Шапка
   const head = MQ.el('div','mq-row mq-row--wrap',
     `<div><h2 style="margin:0">Темы и задачи</h2>
      <p class="mq-muted" style="margin:2px 0">5–11 класс · теория, затем практика</p></div>
@@ -2767,7 +3086,7 @@ MQ.views.topics = async function(){
   }
   wrap.appendChild(head);
 
-  // Фильтры (без изменений)
+  // Фильтры
   const bar = MQ.el('div','mq-card mq-row mq-row--wrap');
   bar.innerHTML = `
     <select class="mq-select" id="tg" style="max-width:160px">
@@ -2799,8 +3118,7 @@ MQ.views.topics = async function(){
 
   // Для каждого раздела создаём аккордеон
   for (const sec of sections) {
-    const details = MQ.el('details','mq-faq'); // используем стиль как в FAQ
-    // Заголовок
+    const details = MQ.el('details','mq-faq');
     const summary = MQ.el('summary');
     summary.innerHTML = `
       <span style="font-weight:700;font-size:16px">${MQ.esc(sec.title)}</span>
@@ -2823,7 +3141,7 @@ MQ.views.topics = async function(){
     }
     details.appendChild(summary);
 
-    // Блок содержимого (по умолчанию скрыт)
+    // Блок содержимого
     const content = MQ.el('div','mq-faq__body');
     // Теория
     if (sec.theory) {
